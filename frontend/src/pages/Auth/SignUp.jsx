@@ -1,9 +1,13 @@
 // pages/Auth/SignUp.jsx
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Input from "../../components/input/Input";
 import { validateEmail } from "../../utils/helper";
-import ProfilePhotoSelector from "../../components/input/ProfilePhotoSelector"; // <- usa el componente externo
+import ProfilePhotoSelector from "../../components/input/ProfilePhotoSelector";
+import axiosInstance from "../../utils/axiosInstance";
+import { API_PATHS } from "../../utils/apiPaths"; // <-- asegúrate del nombre correcto del archivo
+import { UserContext } from "../../context/UserContext";
+import  uploadImage  from "../../utils/uploadImage";
 
 const SignUp = () => {
   const [profilePic, setProfilePic] = useState(null);
@@ -15,7 +19,9 @@ const SignUp = () => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  const { updateUser } = useContext(UserContext);
   const navigate = useNavigate();
+ 
 
   const handleSignUp = async (e) => {
     e.preventDefault();
@@ -28,50 +34,45 @@ const SignUp = () => {
 
     setLoading(true);
     try {
-      const base = import.meta.env.VITE_API_URL || "http://localhost:5000";
-
-      // 1) Subir imagen si hay
+      // 1) Subir imagen si el usuario seleccionó una
       let profileImageUrl = null;
       if (profilePic) {
-        const fd = new FormData();
-        fd.append("image", profilePic);
-        const upRes = await fetch(`${base}/api/upload-image`, {
-          method: "POST",
-          body: fd,
-        });
-        const upData = await upRes.json();
-        if (!upRes.ok)
-          throw new Error(
-            upData.error || upData.message || "Image upload failed"
-          );
-        profileImageUrl = upData.imageUrl;
+        const imgUploadRes = await uploadImage(profilePic);
+        profileImageUrl = imgUploadRes?.imageUrl || null;
       }
 
       // 2) Registrar usuario
-      const res = await fetch(`${base}/api/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const { data: response } = await axiosInstance.post(
+        API_PATHS.AUTH.REGISTER,
+        {
           name: fullName.trim(),
           email,
           password,
           profileImageUrl,
           adminInviteToken: adminInviteToken || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok)
-        throw new Error(data.error || data.message || "Sign up failed");
+        }
+      );
 
-      // 3) Guardar sesión y redirigir
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      const role = data.user?.role;
+      const { token, user, role: roleFromRes } = response || {};
+      if (!token) throw new Error("No se recibió token");
+      if (!user) throw new Error("No se recibió el usuario");
+
+      const role = roleFromRes ?? user.role;
+
+      // 3) Persistir sesión a través del provider (guarda token internamente)
+      updateUser({ ...user, role, token });
+
+      // 4) Redirigir por rol
       navigate(role === "admin" ? "/admin/dashboard" : "/user/dashboard", {
         replace: true,
       });
     } catch (err) {
-      setError(err.message);
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
+        "Sign up failed";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -95,7 +96,6 @@ const SignUp = () => {
         )}
 
         <form onSubmit={handleSignUp} className="space-y-5">
-          {/* Usa el componente externo */}
           <ProfilePhotoSelector
             image={profilePic}
             setImage={setProfilePic}

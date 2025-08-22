@@ -1,10 +1,11 @@
 // pages/Auth/Login.jsx
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Input from "../../components/input/Input";
 import { validateEmail } from "../../utils/helper";
-import axiosInstance from "../../utils/axiosInstance";
-import { API_PATHS } from "../../utils/apiPath";
+import axiosInstance from "../../utils/axiosInstance"; 
+import { API_PATHS } from "../../utils/apiPaths";
+import { UserContext } from "../../context/UserContext"; // si separaste contexto/proveedor
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -13,6 +14,8 @@ const Login = () => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  const { updateUser } = useContext(UserContext);
 
   const handleEmailBlur = () => {
     setEmailError(validateEmail(email) ? null : "Email inválido");
@@ -36,12 +39,13 @@ const Login = () => {
 
       const token = data?.token;
       const user = data?.user;
-      const role = data?.role || user?.role; // por si el backend te manda role aparte
+      const role = data?.role ?? user?.role;
 
       if (!token) throw new Error("No se recibió token");
+      if (!user) throw new Error("No se recibió el usuario");
 
-      localStorage.setItem("token", token);
-      if (user) localStorage.setItem("user", JSON.stringify(user));
+      // Delega persistencia del token al provider
+      updateUser({ ...user, role, token });
 
       navigate(role === "admin" ? "/admin/dashboard" : "/user/dashboard", {
         replace: true,
