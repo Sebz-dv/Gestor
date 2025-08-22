@@ -12,7 +12,6 @@ const ProfilePhotoSelector = ({
   const inputRef = useRef(null);
   const [previewUrl, setPreviewUrl] = useState(null);
 
-  // Genera / limpia el preview cuando cambia `image`
   useEffect(() => {
     if (!image) {
       setPreviewUrl(null);
@@ -39,7 +38,9 @@ const ProfilePhotoSelector = ({
 
   return (
     <div className={`flex items-center gap-4 ${className}`}>
-      <div className="w-16 h-16 rounded-full overflow-hidden bg-slate-100 border grid place-items-center">
+      <div className="w-16 h-16 rounded-full overflow-hidden grid place-items-center
+                      bg-slate-100 border border-slate-200
+                      dark:bg-slate-800 dark:border-slate-700">
         {previewUrl ? (
           <img
             src={previewUrl}
@@ -47,7 +48,7 @@ const ProfilePhotoSelector = ({
             className="w-full h-full object-cover"
           />
         ) : (
-          <LuUser className="text-slate-400" size={28} />
+          <LuUser className="text-slate-400 dark:text-slate-300" size={28} />
         )}
       </div>
 
@@ -56,7 +57,13 @@ const ProfilePhotoSelector = ({
           type="button"
           onClick={onChooseFile}
           disabled={disabled}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-sm hover:bg-slate-50 disabled:opacity-50"
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm
+                     bg-white text-slate-700 hover:bg-slate-50
+                     border-slate-200
+                     focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
+                     disabled:opacity-50
+                     dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/60
+                     dark:border-slate-700 dark:focus-visible:ring-blue-400"
         >
           <LuUpload size={18} />
           Choose Photo
@@ -66,7 +73,11 @@ const ProfilePhotoSelector = ({
           <button
             type="button"
             onClick={handleRemoveImage}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm hover:bg-red-50 text-red-600 border-red-200"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm
+                       text-rose-600 hover:bg-rose-50 border-rose-200
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500
+                       dark:text-rose-400 dark:hover:bg-rose-900/20 dark:border-rose-800
+                       dark:focus-visible:ring-rose-400"
           >
             <LuTrash size={18} />
             Remove

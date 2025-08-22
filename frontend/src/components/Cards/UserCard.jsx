@@ -19,7 +19,7 @@ const Avatar = ({ name = "—", src, size = 48 }) => {
       <img
         src={src}
         alt={`Avatar de ${name}`}
-        className="rounded-full object-cover ring-2 ring-white shrink-0"
+        className="rounded-full object-cover ring-2 ring-white dark:ring-slate-900 shrink-0"
         style={commonStyle}
         loading="lazy"
         decoding="async"
@@ -30,8 +30,9 @@ const Avatar = ({ name = "—", src, size = 48 }) => {
   }
   return (
     <div
-      className="rounded-full grid place-items-center ring-2 ring-white shrink-0
+      className="rounded-full grid place-items-center ring-2 ring-white dark:ring-slate-900 shrink-0
                  bg-gradient-to-br from-slate-200 to-slate-300 text-slate-700
+                 dark:from-slate-700 dark:to-slate-800 dark:text-slate-200
                  text-sm font-semibold select-none"
       aria-label={`Iniciales de ${name}`}
       style={commonStyle}
@@ -43,11 +44,16 @@ const Avatar = ({ name = "—", src, size = 48 }) => {
 
 const StatCard = ({ label, value = 0, status = "default" }) => {
   const styles = {
-    Pending:       "text-amber-700 bg-amber-50 ring-1 ring-amber-100",
-    "In Progress": "text-sky-700 bg-sky-50 ring-1 ring-sky-100",
-    Completed:     "text-emerald-700 bg-emerald-50 ring-1 ring-emerald-100",
-    Overdue:       "text-rose-700 bg-rose-50 ring-1 ring-rose-100",
-    default:       "text-slate-700 bg-slate-50 ring-1 ring-slate-100",
+    Pending:
+      "text-amber-700 bg-amber-50 ring-1 ring-amber-100 dark:text-amber-300 dark:bg-amber-900/30 dark:ring-amber-800/60",
+    "In Progress":
+      "text-sky-700 bg-sky-50 ring-1 ring-sky-100 dark:text-sky-300 dark:bg-sky-900/30 dark:ring-sky-800/60",
+    Completed:
+      "text-emerald-700 bg-emerald-50 ring-1 ring-emerald-100 dark:text-emerald-300 dark:bg-emerald-900/30 dark:ring-emerald-800/60",
+    Overdue:
+      "text-rose-700 bg-rose-50 ring-1 ring-rose-100 dark:text-rose-300 dark:bg-rose-900/30 dark:ring-rose-800/60",
+    default:
+      "text-slate-700 bg-slate-50 ring-1 ring-slate-100 dark:text-slate-300 dark:bg-slate-800/40 dark:ring-slate-700",
   };
   const cls = styles[status] || styles.default;
   const num = Number.isFinite(+value) ? +value : 0;
@@ -55,11 +61,14 @@ const StatCard = ({ label, value = 0, status = "default" }) => {
 
   return (
     <div className={`flex-1 rounded-xl p-3 ${cls}`}>
-      <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/70">
+      <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full
+                       bg-white/70 dark:bg-white/10 dark:text-inherit">
         {status}
       </span>
-      <p className="text-xl font-bold leading-tight mt-1">{nf.format(num)}</p>
-      <p className="text-xs opacity-70">{label}</p>
+      <p className="text-xl font-bold leading-tight mt-1 text-slate-900 dark:text-slate-100">
+        {nf.format(num)}
+      </p>
+      <p className="text-xs opacity-70 text-slate-700 dark:text-slate-300">{label}</p>
     </div>
   );
 };
@@ -70,7 +79,6 @@ const toInt = (v, d = 0) => {
   return Number.isFinite(n) ? n : d;
 };
 const extractCounts = (u = {}) => {
-  // soporta: camelCase, snake_case y estructuras tipo stats/tasks
   const pending =
     u.pendingTasks ?? u.pending ?? u.stats?.pending ?? u.tasks?.pending ?? 0;
   const inProgress =
@@ -104,15 +112,16 @@ const UserCard = ({ userInfo = {} }) => {
   const counts = useMemo(() => extractCounts(userInfo), [userInfo]);
 
   return (
-    <div className="user-card p-3 rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
+    <div className="user-card p-3 rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow
+                    dark:border-slate-800 dark:bg-slate-900 dark:shadow-slate-950/40">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
           <Avatar name={name} src={avatarUrl} size={48} />
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-800 truncate" title={name}>
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate" title={name}>
               {name}
             </p>
-            <p className="text-xs text-slate-500 truncate" title={email}>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate" title={email}>
               {email}
             </p>
           </div>
@@ -123,7 +132,6 @@ const UserCard = ({ userInfo = {} }) => {
         <StatCard label="Pending"     value={counts.pending}    status="Pending" />
         <StatCard label="In Progress" value={counts.inProgress} status="In Progress" />
         <StatCard label="Completed"   value={counts.completed}  status="Completed" />
-        {/* Opcional: muestra Overdue solo si tiene valor > 0 */}
         {counts.overdue > 0 && (
           <StatCard label="Overdue" value={counts.overdue} status="Overdue" />
         )}

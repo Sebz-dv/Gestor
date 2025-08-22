@@ -80,13 +80,13 @@ const ViewTaskDetails = () => {
   const getStatusTagColor = (status) => {
     switch (status) {
       case "Pending":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border dark:border-yellow-800/60";
       case "In Progress":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 dark:border dark:border-blue-800/60";
       case "Completed":
-        return "bg-green-100 text-green-800";
+        return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 dark:border dark:border-green-800/60";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800 dark:bg-slate-800/40 dark:text-slate-200 dark:border dark:border-slate-700";
     }
   };
 
@@ -221,16 +221,18 @@ const ViewTaskDetails = () => {
     <DashboardLayout activeMenu="My Tasks">
       <div className="mt-5">
         {!effectiveId && (
-          <div className="mb-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">
+          <div className="mb-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2
+                          dark:text-rose-300 dark:bg-rose-900/20 dark:border-rose-800/60">
             Falta el parámetro <code>:id</code> en la URL o <code>taskId</code> en{" "}
             <code>state</code>/<code>query</code>.
           </div>
         )}
 
         {loadingTask ? (
-          <div className="text-sm text-slate-500">Cargando…</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400">Cargando…</div>
         ) : taskErr ? (
-          <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">
+          <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2
+                          dark:text-rose-300 dark:bg-rose-900/20 dark:border-rose-800/60">
             {taskErr}
           </div>
         ) : (
@@ -238,9 +240,10 @@ const ViewTaskDetails = () => {
             {task && (
               <>
                 {/* Columna principal */}
-                <div className="form-card col-span-3 p-4 bg-white rounded-lg border border-slate-200">
+                <div className="form-card col-span-3 p-4 bg-white rounded-lg border border-slate-200
+                                dark:bg-slate-900 dark:border-slate-800 dark:shadow-slate-950/40">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-xl md:text-xl font-medium">
+                    <h2 className="text-xl md:text-xl font-medium text-slate-900 dark:text-slate-100">
                       {task?.title ?? "—"}
                     </h2>
                     <div
@@ -253,12 +256,14 @@ const ViewTaskDetails = () => {
                   </div>
 
                   {task?.description && (
-                    <p className="mt-2 text-sm text-slate-700">{task.description}</p>
+                    <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
+                      {task.description}
+                    </p>
                   )}
 
                   {/* Checklist */}
                   <div className="mt-6">
-                    <label className="text-xs font-medium text-slate-500">
+                    <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
                       Todo Checklist
                     </label>
                     {Array.isArray(task?.todoChecklist) &&
@@ -275,14 +280,16 @@ const ViewTaskDetails = () => {
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-sm text-slate-500 mt-2">Sin items en el checklist.</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                        Sin items en el checklist.
+                      </p>
                     )}
                   </div>
 
                   {/* Adjuntos */}
                   {Array.isArray(task?.attachments) && task.attachments.length > 0 && (
                     <div className="mt-6">
-                      <label className="text-xs font-medium text-slate-500">
+                      <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
                         Adjuntos
                       </label>
                       <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -301,7 +308,10 @@ const ViewTaskDetails = () => {
                                 const href = /^https?:\/\//i.test(url) ? url : "https://" + url;
                                 window.open(href, "_blank", "noopener,noreferrer");
                               }}
-                              className="text-left text-sm p-2 rounded border border-slate-200 hover:bg-slate-50"
+                              className="text-left text-sm p-2 rounded border border-slate-200 hover:bg-slate-50
+                                         bg-white text-slate-700
+                                         dark:bg-slate-900 dark:text-slate-200
+                                         dark:border-slate-700 dark:hover:bg-slate-800/60"
                               title={name}
                             >
                               📎 {name}
@@ -314,7 +324,8 @@ const ViewTaskDetails = () => {
                 </div>
 
                 {/* Columna lateral */}
-                <div className="p-4 bg-white rounded-lg border border-slate-200">
+                <div className="p-4 bg-white rounded-lg border border-slate-200
+                                dark:bg-slate-900 dark:border-slate-800">
                   <InfoBox label="Descripción" value={task?.description || "—"} />
                   <InfoBox label="Prioridad" value={task?.priority || "—"} />
                   <InfoBox
@@ -325,14 +336,14 @@ const ViewTaskDetails = () => {
                   />
                   <InfoBox label="Progreso" value={`${task?.progress ?? 0}%`} />
                   <div className="mt-4">
-                    <label className="text-xs font-medium text-slate-500">
+                    <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
                       Assigned To
                     </label>
                     <div className="mt-2">
                       {avatarUrls.length ? (
                         <AvatarGroup avatars={avatarUrls} maxVisible={5} />
                       ) : (
-                        <p className="text-sm text-slate-500">—</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">—</p>
                       )}
                     </div>
                   </div>
@@ -433,15 +444,27 @@ export default ViewTaskDetails;
 
 const InfoBox = ({ label, value }) => (
   <div className="mt-2">
-    <span className="font-medium">{label}:</span>{" "}
-    <span className="text-slate-600">{value}</span>
+    <span className="font-medium text-slate-800 dark:text-slate-100">{label}:</span>{" "}
+    <span className="text-slate-600 dark:text-slate-300">{value}</span>
   </div>
 );
 
 const TodoCheckList = ({ text, isChecked, onChange }) => (
-  <div className="flex items-center gap-3 p-2 border border-slate-200 rounded">
-    <input type="checkbox" checked={isChecked} onChange={onChange} className="w-4 h-4" />
-    <p className={`text-[13px] ${isChecked ? "line-through text-slate-400" : "text-gray-800"}`}>
+  <div className="flex items-center gap-3 p-2 border border-slate-200 rounded
+                  bg-white dark:bg-slate-900 dark:border-slate-700">
+    <input
+      type="checkbox"
+      checked={isChecked}
+      onChange={onChange}
+      className="w-4 h-4 accent-blue-600 dark:accent-blue-500"
+    />
+    <p
+      className={`text-[13px] ${
+        isChecked
+          ? "line-through text-slate-400 dark:text-slate-500"
+          : "text-gray-800 dark:text-slate-100"
+      }`}
+    >
       {text}
     </p>
   </div>

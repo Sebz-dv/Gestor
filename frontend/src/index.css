@@ -9,49 +9,72 @@
   --color-primary: #1368ec;
 }
 
-/* Base (si usas Tailwind, va perfecto dentro de @layer base) */
+/* ----- BASE ----- */
 @layer base {
-  html {
-    font-family: var(--font-display);
+  html { font-family: var(--font-display); }
+
+  /* Fondo claro + texto por defecto */
+  body { @apply bg-slate-50 text-slate-800 overflow-x-hidden; }
+
+  /* Fondo oscuro + texto en dark */
+  .dark body { @apply bg-slate-950 text-slate-100; }
+}
+
+/* ----- COMPONENTES (AQUÍ van tus clases personalizadas) ----- */
+@layer components {
+  .card {
+    @apply bg-white p-6 rounded-2xl border border-slate-200/50 shadow-md shadow-gray-100
+           dark:bg-slate-900 dark:border-slate-800;
   }
-  body {
-    background-color: #fcfbfc;
-    overflow-x: hidden;
+
+  .card-btn {
+    @apply flex items-center gap-3 text-[12px] font-medium
+           text-slate-700 bg-slate-50 hover:bg-blue-50 hover:text-[color:var(--color-primary)]
+           px-4 py-1.5 rounded-lg border border-slate-200/50 cursor-pointer
+           dark:text-slate-300 dark:bg-slate-800/40 dark:hover:bg-slate-800/70;
   }
-}
 
-.card {
-  @apply bg-white p-6 rounded-2xl border border-gray-200/50 shadow-md shadow-gray-100;
-}
+  .card-btn-delete {
+    @apply flex items-center gap-3 text-[12px] font-medium
+           text-slate-700 bg-slate-50 px-4 py-1.5 rounded-lg border cursor-pointer
+           border-red-600/50 hover:bg-red-400 hover:text-white
+           dark:text-slate-300 dark:bg-slate-800/40 dark:hover:bg-red-500;
+  }
 
-.card-btn {
-  @apply flex items-center gap-3 text-[12px] font-medium text-gray-700 hover:text-primary bg-gray-50 hover:bg-blue-50 px-4 py-1.5 rounded-lg border border-gray-200/50 cursor-pointer;
-}
+  .card-btn-fill {
+    @apply flex items-center gap-3 text-[12px] font-medium
+           text-white bg-[color:var(--color-primary)] px-4 py-1.5 rounded-lg border border-[color:var(--color-primary)]
+           hover:bg-blue-50 hover:text-[color:var(--color-primary)]
+           dark:hover:bg-slate-800/60;
+  }
 
-.card-btn-delete {
-  @apply flex items-center gap-3 text-[12px] font-medium text-gray-700 hover:text-white bg-gray-50 hover:bg-red-400 px-4 py-1.5 rounded-lg border border-red-600/50 cursor-pointer;
-}
+  .from-card {
+    @apply bg-white p-6 rounded-lg shadow-md shadow-gray-100 border border-slate-200/50
+           dark:bg-slate-900 dark:border-slate-800;
+  }
 
-.card-btn-fill {
-  @apply flex items-center gap-3 text-[12px] font-medium text-white hover:text-primary bg-primary hover:bg-blue-50 px-4 py-1.5 rounded-lg border border-primary cursor-pointer;
-}
+  .form-input {
+    @apply w-full text-sm text-slate-900 outline-none bg-white border border-slate-200
+           px-2.5 py-3 rounded-md mt-2 placeholder:text-slate-500
+           dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 dark:placeholder:text-slate-500;
+  }
 
-.from-card {
-  @apply bg-white p-6 rounded-lg shadow-md shadow-gray-100 border border-gray-200/50;
-}
+  .add-btn {
+    @apply w-full flex items-center justify-center gap-1.5 text-xs md:text-sm font-medium
+           text-[color:var(--color-primary)] whitespace-nowrap bg-blue-50 border border-blue-100
+           rounded-lg px-4 py-2 cursor-pointer
+           dark:bg-slate-800/40 dark:border-slate-700;
+  }
 
-.form-input {
-  @apply w-full text-sm text-black outline-none bg-white border border-slate-100 px-2.5 py-3 rounded-md mt-2 placeholder:text-gray-500;
-}
+  .download-btn {
+    @apply items-center gap-3 text-xs md:text-[13px] font-medium
+           text-lime-900 bg-lime-100 px-2 md:px-3 py-1.5 rounded-lg border border-lime-200/50
+           hover:bg-lime-200 hover:text-lime-800
+           dark:text-lime-300 dark:bg-lime-900/20 dark:border-lime-800/40;
+  }
 
-.add-btn {
-  @apply w-full flex items-center justify-center gap-1.5 text-xs md:text-sm font-medium text-primary whitespace-nowrap bg-blue-50 border-blue-100 rounded-lg px-4 py-2 cursor-pointer;
-}
-
-.download-btn {
-  @apply items-center gap-3 text-xs md:text-[13px] text-lime-900 bg-lime-100 px-2 md:px-3 py-1.5 rounded-lg border border-lime-200/50 font-medium hover:bg-lime-200 hover:text-lime-800 cursor-pointer;
-}
-
-.user-card {
-  @apply bg-white p-4 rounded-lg shadow-md shadow-gray-100 border border-gray-200/50;
+  .user-card {
+    @apply bg-white p-4 rounded-lg shadow-md shadow-gray-100 border border-slate-200/50
+           dark:bg-slate-900 dark:border-slate-800;
+  }
 }

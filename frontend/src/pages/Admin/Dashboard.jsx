@@ -60,7 +60,7 @@ const Dashboard = () => {
     setError(null);
     setLoading(true);
     try {
-      const { data } = await axiosInstance.get(API_PATHS.TASKS.GET_DASHBOARD_DATA); 
+      const { data } = await axiosInstance.get(API_PATHS.TASKS.GET_DASHBOARD_DATA);
       setDashboardData(data);
       prepareChartData(data);
     } catch (err) {
@@ -91,16 +91,20 @@ const Dashboard = () => {
 
   return (
     <DashboardLayout activeMenu="Dashboard">
-      <div className="card my-5">
+      {/* Contenedor principal */}
+      <div className="card my-5 dark:bg-slate-900 dark:border-slate-800">
         <div className="col-span-3">
-          <h2 className="text-xl md:text-2xl">¡Buenos días! {user?.name}</h2>
-          <p className="text-xs md:text-[13px] text-gray-400 mt-1.5">
+          <h2 className="text-xl md:text-2xl text-slate-900 dark:text-slate-100">
+            ¡Buenos días! {user?.name}
+          </h2>
+          <p className="text-xs md:text-[13px] text-gray-500 dark:text-slate-400 mt-1.5">
             {moment().format("dddd, D [de] MMMM [de] YYYY")}
           </p>
         </div>
 
         {error && (
-          <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">
+          <div className="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3
+                          dark:text-red-300 dark:bg-red-900/20 dark:border-red-800/50">
             {error}
           </div>
         )}
@@ -108,36 +112,40 @@ const Dashboard = () => {
         {/* KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mt-5">
           <InfoCard label="Tareas Totales" value={addThousandsSeparator(totalTasks)} color="bg-blue-500" />
-          <InfoCard label="Completadas" value={addThousandsSeparator(completed)} color="bg-green-500" />
           <InfoCard label="Pendientes" value={addThousandsSeparator(pending)} color="bg-violet-500" />
-          <InfoCard label="En Progreso" value={addThousandsSeparator(inProgress)} color="bg-yellow-500" />
+          <InfoCard label="En Progreso" value={addThousandsSeparator(inProgress)} color="bg-[#00B8DB]" />
+          <InfoCard label="Completadas" value={addThousandsSeparator(completed)} color="bg-green-500" />
         </div>
 
         {/* Gráficas + tabla */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-4 md:my-6">
           <div>
-            <div className="card">
+            <div className="card dark:bg-slate-900 dark:border-slate-800">
               <div className="flex items-center justify-between">
-                <h5 className="font-medium">Distribución de Tareas</h5>
+                <h5 className="font-medium text-slate-800 dark:text-slate-100">Distribución de Tareas</h5>
               </div>
               <CustomPieChart data={pieChartData} colors={COLORS} />
             </div>
           </div>
 
           <div>
-            <div className="card">
+            <div className="card dark:bg-slate-900 dark:border-slate-800">
               <div className="flex items-center justify-between">
-                <h5 className="font-medium">Niveles de Prioridad</h5>
+                <h5 className="font-medium text-slate-800 dark:text-slate-100">Niveles de Prioridad</h5>
               </div>
               <CustomBarChart data={barChartData} />
             </div>
           </div>
 
           <div className="md:col-span-2">
-            <div className="card">
+            <div className="card dark:bg-slate-900 dark:border-slate-800">
               <div className="flex items-center justify-between">
-                <h5 className="text-lg">Tareas Recientes</h5>
-                <button className="card-btn flex items-center gap-1" onClick={onSeeMore}>
+                <h5 className="text-lg text-slate-800 dark:text-slate-100">Tareas Recientes</h5>
+                <button
+                  className="card-btn flex items-center gap-1 text-slate-700 hover:bg-slate-100
+                             dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-slate-100"
+                  onClick={onSeeMore}
+                >
                   Ver todas <LuArrowRight className="text-base" />
                 </button>
               </div>
@@ -147,7 +155,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {loading && <div className="mt-3 text-sm text-gray-500">Cargando…</div>}
+        {loading && <div className="mt-3 text-sm text-gray-600 dark:text-slate-400">Cargando…</div>}
       </div>
     </DashboardLayout>
   );

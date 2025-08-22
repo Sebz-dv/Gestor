@@ -42,10 +42,7 @@ const UserDashboard = () => {
 
     const taskDistributionData = [
       { status: "Pending", count: getNum(taskDistribution, "Pending") },
-      {
-        status: "In Progress",
-        count: getNum(taskDistribution, "InProgress", "In Progress"),
-      },
+      { status: "In Progress", count: getNum(taskDistribution, "InProgress", "In Progress") },
       { status: "Completed", count: getNum(taskDistribution, "Completed") },
     ];
 
@@ -70,9 +67,7 @@ const UserDashboard = () => {
       prepareChartData(data);
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
-      setError(
-        "No se pudo cargar el dashboard. Intenta de nuevo en unos segundos."
-      );
+      setError("No se pudo cargar el dashboard. Intenta de nuevo en unos segundos.");
       setPieChartData([]);
       setBarChartData([]);
     } finally {
@@ -91,26 +86,26 @@ const UserDashboard = () => {
 
   // --- KPIs ---
   const counts = dashboardData?.countsByStatus ?? {};
-  const totalTasks = Object.values(counts).reduce(
-    (acc, n) => acc + Number(n || 0),
-    0
-  );
+  const totalTasks = Object.values(counts).reduce((acc, n) => acc + Number(n || 0), 0);
   const completed = Number(counts.Completed || 0);
   const pending = Number(counts.Pending || 0);
   const inProgress = Number(counts.InProgress || counts["In Progress"] || 0);
 
   return (
     <DashboardLayout activeMenu="Dashboard">
-      <div className="card my-5">
+      <div className="card my-5 dark:bg-slate-900 dark:border-slate-800">
         <div className="col-span-3">
-          <h2 className="text-xl md:text-2xl">¡Buenos días! {user?.name}</h2>
-          <p className="text-xs md:text-[13px] text-gray-400 mt-1.5">
+          <h2 className="text-xl md:text-2xl text-slate-900 dark:text-slate-100">
+            ¡Buenos días! {user?.name}
+          </h2>
+          <p className="text-xs md:text-[13px] text-gray-400 dark:text-slate-400 mt-1.5">
             {moment().format("dddd, D [de] MMMM [de] YYYY")}
           </p>
         </div>
 
         {error && (
-          <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">
+          <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3
+                          dark:text-red-300 dark:bg-red-900/20 dark:border-red-800/60">
             {error}
           </div>
         )}
@@ -135,36 +130,37 @@ const UserDashboard = () => {
           <InfoCard
             label="En Progreso"
             value={addThousandsSeparator(inProgress)}
-            color="[#00B8DB]"
+            color="bg-[#00B8DB]"   // <- fix del color
           />
         </div>
 
         {/* Gráficas + tabla */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-4 md:my-6">
           <div>
-            <div className="card">
+            <div className="card dark:bg-slate-900 dark:border-slate-800">
               <div className="flex items-center justify-between">
-                <h5 className="font-medium">Distribución de Tareas</h5>
+                <h5 className="font-medium text-slate-800 dark:text-slate-100">Distribución de Tareas</h5>
               </div>
               <CustomPieChart data={pieChartData} colors={COLORS} />
             </div>
           </div>
 
           <div>
-            <div className="card">
+            <div className="card dark:bg-slate-900 dark:border-slate-800">
               <div className="flex items-center justify-between">
-                <h5 className="font-medium">Niveles de Prioridad</h5>
+                <h5 className="font-medium text-slate-800 dark:text-slate-100">Niveles de Prioridad</h5>
               </div>
               <CustomBarChart data={barChartData} />
             </div>
           </div>
 
           <div className="md:col-span-2">
-            <div className="card">
+            <div className="card dark:bg-slate-900 dark:border-slate-800">
               <div className="flex items-center justify-between">
-                <h5 className="text-lg">Tareas Recientes</h5>
+                <h5 className="text-lg text-slate-800 dark:text-slate-100">Tareas Recientes</h5>
                 <button
-                  className="card-btn flex items-center gap-1"
+                  className="card-btn flex items-center gap-1 text-slate-700 hover:bg-slate-100
+                             dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-slate-100"
                   onClick={onSeeMore}
                 >
                   Ver todas <LuArrowRight className="text-base" />
@@ -176,7 +172,9 @@ const UserDashboard = () => {
           </div>
         </div>
 
-        {loading && <div className="mt-3 text-sm text-gray-500">Cargando…</div>}
+        {loading && (
+          <div className="mt-3 text-sm text-gray-500 dark:text-slate-400">Cargando…</div>
+        )}
       </div>
     </DashboardLayout>
   );

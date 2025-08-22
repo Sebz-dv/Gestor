@@ -31,8 +31,6 @@ const Input = forwardRef(
     },
     ref
   ) => {
-    // ❌ id || useId() (condicional)
-    // ✅ siempre llamamos useId, luego resolvemos
     const autoId = useId();
     const uid = id ?? autoId;
 
@@ -41,9 +39,16 @@ const Input = forwardRef(
     const inputType = wantsToggle && showPassword ? "text" : type;
 
     const base =
-      "w-full border rounded-lg px-3 py-2 outline-none transition " +
-      "focus:ring-2 focus:ring-offset-0 " +
-      (error ? "border-red-400 focus:ring-red-500" : "border-slate-300 focus:ring-[#1368EC]");
+      [
+        "w-full rounded-lg px-3 py-2 outline-none transition",
+        "focus:ring-2 focus:ring-offset-0",
+        error
+          ? "border border-rose-400 focus:ring-rose-500 dark:border-rose-500"
+          : "border border-slate-300 focus:ring-[#1368EC] dark:border-slate-700",
+        "bg-white text-slate-900 placeholder:text-slate-500",
+        "dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+      ].join(" ");
+
     const disabledCls = disabled ? " opacity-50 cursor-not-allowed" : "";
 
     const hasLeft = !!leftIcon;
@@ -54,14 +59,14 @@ const Input = forwardRef(
     return (
       <div className={`w-full ${className}`}>
         {label && (
-          <label htmlFor={uid} className="block text-sm mb-1 text-slate-800">
-            {label} {required && <span className="text-red-500">*</span>}
+          <label htmlFor={uid} className="block text-sm mb-1 text-slate-800 dark:text-slate-200">
+            {label} {required && <span className="text-rose-500">*</span>}
           </label>
         )}
 
         <div className="relative">
           {hasLeft && (
-            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">
               {leftIcon}
             </span>
           )}
@@ -76,6 +81,7 @@ const Input = forwardRef(
             placeholder={placeholder}
             required={required}
             disabled={disabled}
+            aria-invalid={!!error}
             className={base + disabledCls + paddingLeft + paddingRight}
             {...rest}
           />
@@ -84,7 +90,7 @@ const Input = forwardRef(
             {rightIcon && !wantsToggle ? (
               <button
                 type="button"
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
                 onClick={onRightIconClick}
                 aria-label="action"
               >
@@ -94,20 +100,20 @@ const Input = forwardRef(
               showPassword ? (
                 <button
                   type="button"
-                  className="text-primary hover:opacity-80"
+                  className="text-primary hover:opacity-80 dark:text-blue-400"
                   onClick={() => setShowPassword((s) => !s)}
                   aria-label="Hide password"
                 >
-                  <FaRegEye size={20} className="mt-2"/>
+                  <FaRegEye size={20} className="mt-2" />
                 </button>
               ) : (
                 <button
                   type="button"
-                  className="text-slate-400 hover:text-slate-600"
+                  className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
                   onClick={() => setShowPassword((s) => !s)}
                   aria-label="Show password"
                 >
-                  <FaRegEyeSlash size={20} className="mt-2"/>
+                  <FaRegEyeSlash size={20} className="mt-2" />
                 </button>
               )
             ) : null}
@@ -115,9 +121,9 @@ const Input = forwardRef(
         </div>
 
         {error ? (
-          <p className="mt-1 text-xs text-red-600">{error}</p>
+          <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{error}</p>
         ) : helperText ? (
-          <p className="mt-1 text-xs text-slate-500">{helperText}</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{helperText}</p>
         ) : null}
       </div>
     );

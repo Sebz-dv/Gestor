@@ -14,25 +14,23 @@ import TodoListInput from "../../components/input/TodoListInput";
 import AddAttachmentsInput from "../../components/input/AddAttachmentsInput";
 
 const FieldHint = ({ children }) => (
-  <p className="mt-1 text-[11px] text-slate-500">{children}</p>
+  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{children}</p>
 );
 
 const SectionTitle = ({ title, desc }) => (
   <div className="mb-3">
-    <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-    {desc ? <p className="text-xs text-slate-500 mt-0.5">{desc}</p> : null}
+    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</h3>
+    {desc ? <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{desc}</p> : null}
   </div>
 );
 
 const Skeleton = ({ className = "" }) => (
-  <div className={`animate-pulse rounded-md bg-slate-200/70 ${className}`} />
+  <div className={`animate-pulse rounded-md bg-slate-200/70 dark:bg-slate-700/50 ${className}`} />
 );
 
 // ==========================================
 // 🔧 Normalizers para datos inconsistentes
 // ==========================================
-
-// Intenta parsear strings tipo JSON ("[1,2]", "{...}") o CSV ("1,2,3")
 const parseMaybeJson = (val) => {
   if (typeof val !== "string") return val;
   try {
@@ -40,7 +38,6 @@ const parseMaybeJson = (val) => {
     if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
       return JSON.parse(trimmed);
     }
-    // CSV de enteros: "1,2,3"
     if (/^\d+(,\d+)*$/.test(trimmed)) {
       return trimmed.split(",").map((s) => Number(s));
     }
@@ -49,47 +46,37 @@ const parseMaybeJson = (val) => {
     return val;
   }
 };
-
-// Garantiza un arreglo a partir de valor, arreglo, JSON string, CSV, etc.
 const ensureArray = (val) => {
   const v = parseMaybeJson(val);
   if (Array.isArray(v)) return v;
   if (v == null || v === "") return [];
   return [v];
 };
-
-// Acepta 1, "2", [1,"2"], {id:3}, {value:4}, "1,2" o "[1,2]" y devuelve [1,2,3,4] (números)
 const normalizeUserIdsFromApi = (input) => {
   const arr = ensureArray(input);
   const ids = arr.map((x) => {
     if (x == null) return null;
     if (typeof x === "number" || typeof x === "string") return Number(x);
     if (typeof x === "object") {
-      return Number(
-        x.id ?? x.userId ?? x.value ?? x.key ?? x.uid ?? x.user_id ?? NaN
-      );
+      return Number(x.id ?? x.userId ?? x.value ?? x.key ?? x.uid ?? x.user_id ?? NaN);
     }
     return null;
   });
   return [...new Set(ids.filter((n) => Number.isFinite(n)))];
 };
-
-// Para enviar al API como primitivos (evita mandar objetos). Acepta scalar/array/JSON.
 const toApiUserIds = (val) => {
   const arr = ensureArray(val);
   return arr
     .map((x) => (typeof x === "number" || typeof x === "string" ? Number(x) : null))
     .filter((n) => Number.isFinite(n));
 };
-
-// Acepta "name.ext", ["a"], {name,url}, {filename,path} o JSON string y devuelve [{name,url}]
 const normalizeAttachmentsFromApi = (input) => {
   const arr = ensureArray(input);
   return arr
     .map((x) => {
       if (!x) return null;
       if (typeof x === "string") {
-        return { name: x, url: x }; // si guardaste solo string, úsalo como nombre+url
+        return { name: x, url: x };
       }
       if (typeof x === "object") {
         const name = x.name ?? x.filename ?? x.title ?? x.label ?? x.url ?? x.path ?? "archivo";
@@ -100,8 +87,6 @@ const normalizeAttachmentsFromApi = (input) => {
     })
     .filter(Boolean);
 };
-
-// Para enviar al API como arreglo de strings. Acepta scalar/array/JSON.
 const toApiAttachments = (val) => {
   const arr = ensureArray(val);
   return arr
@@ -121,20 +106,19 @@ const CreateTask = () => {
   const location = useLocation();
   const params = useParams();
 
-  // Acepta :id o :taskId en la ruta; si no, intenta con state
   const { id: idParam, taskId: taskIdParam } = params || {};
-  const routeId = idParam ?? taskIdParam ?? null; // de /admin/tasks/:id o /:taskId
-  const stateId = location?.state?.taskId ?? null; // por si navegaste con state
-  const taskId = routeId ?? stateId; // si no hay ninguno => modo crear
+  const routeId = idParam ?? taskIdParam ?? null;
+  const stateId = location?.state?.taskId ?? null;
+  const taskId = routeId ?? stateId;
 
   const [taskData, setTaskData] = useState({
     title: "",
     description: "",
     priority: "Low",
-    dueDate: null, // "YYYY-MM-DD"
-    assignedTo: [], // [userId, ...] (números)
-    todoChecklist: [], // [{ text:'', completed: boolean }]
-    attachments: [], // [{ name, url }]
+    dueDate: null,
+    assignedTo: [],
+    todoChecklist: [],
+    attachments: [],
   });
 
   const [currentTask, setCurrentTask] = useState(null);
@@ -159,13 +143,11 @@ const CreateTask = () => {
     setError("");
   };
 
-  // ---- Helpers de normalización/formatos ----
   const normalizeChecklist = (list = []) =>
     list.map((item) => {
-      // Acepta string u objeto y lo lleva a { text, completed }
       if (typeof item === "string") return { text: item, completed: false };
       const text = typeof item?.text === "string" ? item.text : "";
-      const completedRaw = item?.completed ?? item?.done ?? false; // soporta 'done' heredado
+      const completedRaw = item?.completed ?? item?.done ?? false;
       return { text, completed: Boolean(completedRaw) };
     });
 
@@ -174,7 +156,6 @@ const CreateTask = () => {
     return n.map(({ text, completed }) => ({ text, completed: Boolean(completed) }));
   };
 
-  // ---- Cargar tarea (modo edición) ----
   const fetchTask = async (id) => {
     setLoading(true);
     setError("");
@@ -190,9 +171,7 @@ const CreateTask = () => {
         description: data?.description ?? "",
         priority: data?.priority ?? "Low",
         dueDate: data?.dueDate ? moment(data.dueDate).format("YYYY-MM-DD") : null,
-        // 👇 Normaliza IDs a números, sin importar el formato que venga del backend
         assignedTo: normalizeUserIdsFromApi(data?.assignedTo ?? data?.assigned_to),
-        // 👇 Convierte a {name,url} para que el input pueda renderizarlo
         attachments: normalizeAttachmentsFromApi(data?.attachments),
         todoChecklist: normalizeChecklist(data?.todoChecklist ?? data?.todo_checklist ?? []),
       });
@@ -210,12 +189,10 @@ const CreateTask = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
 
-  // ---- Guardado ----
   const handleSubmit = async (e) => {
     e?.preventDefault();
     setError("");
 
-    // Validaciones mínimas
     if (!taskData.title?.trim()) return setError("Title is required.");
     if (!taskData.description?.trim()) return setError("Description is required.");
     if (!taskData.dueDate) return setError("Due date is required.");
@@ -238,7 +215,6 @@ const CreateTask = () => {
         ...taskData,
         dueDate: toIso(taskData.dueDate),
         todoChecklist: toApiChecklist(taskData.todoChecklist),
-        // 👇 Envía arrays "planos" al backend
         assignedTo: toApiUserIds(taskData.assignedTo),
         attachments: toApiAttachments(taskData.attachments),
       };
@@ -261,7 +237,6 @@ const CreateTask = () => {
   const updateTask = async () => {
     setLoading(true);
     try {
-      // Mantener status de completado cuando coincida por 'text'
       const prev = Array.isArray(currentTask?.todoChecklist)
         ? normalizeChecklist(currentTask.todoChecklist)
         : [];
@@ -278,7 +253,6 @@ const CreateTask = () => {
         ...taskData,
         dueDate: toIso(taskData.dueDate),
         todoChecklist: merged,
-        // 👇 Envía arrays normalizados al backend
         assignedTo: toApiUserIds(taskData.assignedTo),
         attachments: toApiAttachments(taskData.attachments),
       };
@@ -323,10 +297,10 @@ const CreateTask = () => {
         {/* Header de página */}
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-xl md:text-2xl font-semibold text-slate-900">
+            <h1 className="text-xl md:text-2xl font-semibold text-slate-900 dark:text-slate-100">
               {taskId ? "Actualizar Tarea" : "Crear Tarea"}
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Define la información, asigna responsables y adjunta archivos.
             </p>
           </div>
@@ -335,7 +309,8 @@ const CreateTask = () => {
             <button
               type="button"
               onClick={() => setOpenDeleteAlert(true)}
-              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-rose-600 bg-rose-50 rounded px-3 py-2 border border-rose-200 hover:border-rose-300 transition-colors"
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-rose-600 bg-rose-50 rounded px-3 py-2 border border-rose-200 hover:border-rose-300 transition-colors
+                         dark:text-rose-300 dark:bg-rose-900/20 dark:border-rose-800/50 dark:hover:border-rose-700"
               disabled={loading}
             >
               <LuTrash2 className="text-base" /> Eliminar
@@ -347,8 +322,8 @@ const CreateTask = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Card principal */}
             <div className="md:col-span-3">
-              <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div className="p-5 border-b border-slate-200">
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="p-5 border-b border-slate-200 dark:border-slate-800">
                   <SectionTitle
                     title="Información general"
                     desc="Estos campos ayudan a entender el alcance de la tarea."
@@ -363,7 +338,7 @@ const CreateTask = () => {
                   ) : (
                     <>
                       <div className="mt-2">
-                        <label className="text-xs font-medium text-slate-700">
+                        <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
                           Título
                         </label>
                         <input
@@ -377,7 +352,7 @@ const CreateTask = () => {
                       </div>
 
                       <div className="mt-3">
-                        <label className="text-xs font-medium text-slate-700">
+                        <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
                           Descripción
                         </label>
                         <textarea
@@ -394,13 +369,14 @@ const CreateTask = () => {
                   )}
 
                   {error && (
-                    <div className="mt-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">
+                    <div className="mt-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3
+                                    dark:text-rose-300 dark:bg-rose-900/30 dark:border-rose-800/50">
                       {error}
                     </div>
                   )}
                 </div>
 
-                <div className="p-5 border-b border-slate-200">
+                <div className="p-5 border-b border-slate-200 dark:border-slate-800">
                   <SectionTitle
                     title="Planificación y responsables"
                     desc="Define prioridad, fecha y personas asignadas."
@@ -408,7 +384,7 @@ const CreateTask = () => {
 
                   <div className="grid grid-cols-12 gap-4">
                     <div className="col-span-6 md:col-span-4">
-                      <label className="text-xs font-medium text-slate-700">
+                      <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
                         Priority
                       </label>
                       <SelectDropdown
@@ -422,7 +398,7 @@ const CreateTask = () => {
                     </div>
 
                     <div className="col-span-6 md:col-span-4">
-                      <label className="text-xs font-medium text-slate-700">
+                      <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
                         Due Date
                       </label>
                       <input
@@ -436,7 +412,7 @@ const CreateTask = () => {
                     </div>
 
                     <div className="col-span-12">
-                      <label className="text-xs font-medium text-slate-700">
+                      <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
                         Assign To
                       </label>
                       <SelectUsers
@@ -449,7 +425,7 @@ const CreateTask = () => {
                   </div>
                 </div>
 
-                <div className="p-5 border-b border-slate-200">
+                <div className="p-5 border-b border-slate-200 dark:border-slate-800">
                   <SectionTitle title="Checklist" desc="Desglosa la tarea en pasos accionables." />
                   <TodoListInput
                     todoList={taskData?.todoChecklist}
@@ -468,12 +444,14 @@ const CreateTask = () => {
                 </div>
 
                 {/* Barra de acciones sticky dentro de la card */}
-                <div className="sticky bottom-0 border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/70">
+                <div className="sticky bottom-0 border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/70
+                                dark:border-slate-800 dark:bg-slate-900/90 dark:supports-[backdrop-filter]:bg-slate-900/70">
                   <div className="p-4 flex items-center justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => navigate(-1)}
-                      className="px-3 py-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
+                      className="px-3 py-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors
+                                 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-800/60"
                       disabled={loading}
                     >
                       Cancelar
@@ -493,31 +471,31 @@ const CreateTask = () => {
             {/* Columna lateral */}
             <div className="md:col-span-1">
               <div className="sticky top-24">
-                <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
-                  <h4 className="text-sm font-semibold text-slate-800">Resumen</h4>
-                  <div className="mt-3 space-y-1.5 text-xs text-slate-600">
+                <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 dark:border-slate-800 dark:bg-slate-900">
+                  <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Resumen</h4>
+                  <div className="mt-3 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
                     <div>
-                      <span className="text-slate-500">Priority:</span>{" "}
+                      <span className="text-slate-500 dark:text-slate-400">Priority:</span>{" "}
                       <span className="font-medium">{taskData.priority || "—"}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500">Due Date:</span>{" "}
+                      <span className="text-slate-500 dark:text-slate-400">Due Date:</span>{" "}
                       <span className="font-medium">{taskData.dueDate || "—"}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500">Asignados:</span>{" "}
+                      <span className="text-slate-500 dark:text-slate-400">Asignados:</span>{" "}
                       <span className="font-medium">
                         {Array.isArray(taskData.assignedTo) ? taskData.assignedTo.length : 0}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-500">Checklist:</span>{" "}
+                      <span className="text-slate-500 dark:text-slate-400">Checklist:</span>{" "}
                       <span className="font-medium">
                         {Array.isArray(taskData.todoChecklist) ? taskData.todoChecklist.length : 0}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-500">Adjuntos:</span>{" "}
+                      <span className="text-slate-500 dark:text-slate-400">Adjuntos:</span>{" "}
                       <span className="font-medium">
                         {Array.isArray(taskData.attachments) ? taskData.attachments.length : 0}
                       </span>
@@ -538,17 +516,18 @@ const CreateTask = () => {
             aria-labelledby="delete-title"
             aria-describedby="delete-desc"
           >
-            <div className="bg-white rounded-xl p-5 w-full max-w-sm shadow-2xl border border-slate-200">
-              <h4 id="delete-title" className="text-base font-semibold text-slate-900">
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-5 w-full max-w-sm shadow-2xl border border-slate-200 dark:border-slate-800">
+              <h4 id="delete-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
                 Eliminar tarea
               </h4>
-              <p id="delete-desc" className="text-sm text-slate-600 mt-2">
+              <p id="delete-desc" className="text-sm text-slate-600 dark:text-slate-300 mt-2">
                 ¿Seguro que deseas eliminar esta tarea? Esta acción no se puede deshacer.
               </p>
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   onClick={() => setOpenDeleteAlert(false)}
-                  className="px-3 py-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
+                  className="px-3 py-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors
+                             dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-800/60"
                   disabled={loading}
                 >
                   Cancelar

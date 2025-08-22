@@ -9,32 +9,32 @@ const normalizeStatus = (status) => {
   return s;
 };
 
-/** Colores para el badge de ESTADO */
+/** Colores para el badge de ESTADO (light + dark) */
 const getStatusBadgeColor = (statusRaw) => {
   const status = normalizeStatus(statusRaw);
   switch (status) {
     case "Completed":
-      return "bg-green-100 text-green-600 border border-green-200";
+      return "bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/50";
     case "Pending":
-      return "bg-purple-100 text-purple-600 border border-purple-200";
+      return "bg-purple-100 text-purple-700 border border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/50";
     case "In Progress":
-      return "bg-cyan-100 text-cyan-600 border border-cyan-200";
+      return "bg-cyan-100 text-cyan-700 border border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800/50";
     default:
-      return "bg-gray-100 text-gray-600 border border-gray-200";
+      return "bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800/40 dark:text-slate-300 dark:border-slate-700";
   }
 };
 
-/** Colores para el badge de PRIORIDAD */
+/** Colores para el badge de PRIORIDAD (light + dark) */
 const getPriorityBadgeColor = (priority) => {
   switch (priority) {
     case "High":
-      return "bg-red-100 text-red-600 border border-red-200";
+      return "bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800/50";
     case "Medium":
-      return "bg-orange-100 text-orange-600 border border-orange-200";
+      return "bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800/50";
     case "Low":
-      return "bg-green-100 text-green-600 border border-green-200";
+      return "bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/50";
     default:
-      return "bg-gray-100 text-gray-600 border border-gray-200";
+      return "bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800/40 dark:text-slate-300 dark:border-slate-700";
   }
 };
 
@@ -48,10 +48,10 @@ const TaskListTable = ({ tableData = [] }) => {
       <table className="min-w-full">
         <thead>
           <tr>
-            <th className="px-4 py-3 text-left text-gray-800 font-medium text-[13px]">Nombre</th>
-            <th className="px-4 py-3 text-left text-gray-800 font-medium text-[13px]">Estado</th>
-            <th className="px-4 py-3 text-left text-gray-800 font-medium text-[13px]">Prioridad</th>
-            <th className="px-4 py-3 text-left text-gray-800 font-medium text-[13px] hidden md:table-cell">Creado</th>
+            <th className="px-4 py-3 text-left text-slate-800 dark:text-slate-300 font-medium text-[13px]">Nombre</th>
+            <th className="px-4 py-3 text-left text-slate-800 dark:text-slate-300 font-medium text-[13px]">Estado</th>
+            <th className="px-4 py-3 text-left text-slate-800 dark:text-slate-300 font-medium text-[13px]">Prioridad</th>
+            <th className="px-4 py-3 text-left text-slate-800 dark:text-slate-300 font-medium text-[13px] hidden md:table-cell">Creado</th>
           </tr>
         </thead>
         <tbody>
@@ -61,8 +61,8 @@ const TaskListTable = ({ tableData = [] }) => {
             const dateValue = task.createdAt ?? task.createAt ?? task.dueDate ?? null;
 
             return (
-              <tr key={key} className="border-t border-gray-200">
-                <td className="my-3 mx-4 text-gray-700 text-[13px] line-clamp-1 overflow-hidden">
+              <tr key={key} className="border-t border-slate-200 dark:border-slate-800">
+                <td className="my-3 mx-4 text-slate-700 dark:text-slate-300 text-[13px] line-clamp-1 overflow-hidden">
                   {task.title ?? "—"}
                 </td>
 
@@ -78,7 +78,7 @@ const TaskListTable = ({ tableData = [] }) => {
                   </span>
                 </td>
 
-                <td className="py-4 px-4 text-gray-700 text-[13px] text-nowrap hidden md:table-cell">
+                <td className="py-4 px-4 text-slate-700 dark:text-slate-400 text-[13px] text-nowrap hidden md:table-cell">
                   {dateValue ? moment(dateValue).format("D MMM YYYY") : "N/A"}
                 </td>
               </tr>
