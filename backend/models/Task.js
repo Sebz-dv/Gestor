@@ -4,8 +4,48 @@
 const TASK_FIELDS =
   "id, title, description, priority, status, due_date AS dueDate, assigned_to AS assignedTo, created_by AS createdBy, attachments, progress, created_at AS createdAt, updated_at AS updatedAt";
 
+// --- helpers ---
+const parseJSON = (val, fallback = []) => {
+  if (Array.isArray(val)) return val;
+  if (val == null || val === "") return fallback;
+  try {
+    return JSON.parse(val);
+  } catch {
+    return fallback;
+  }
+};
+
+const toJsonIds = (input) => {
+  const arr = Array.isArray(input) ? input : input == null ? [] : [input];
+  const ids = arr
+    .map((x) =>
+      typeof x === "number"
+        ? x
+        : typeof x === "string"
+        ? Number(x)
+        : typeof x === "object"
+        ? Number(x?.id ?? x?.value ?? x?.userId ?? x?.user_id ?? NaN)
+        : NaN
+    )
+    .filter((n) => Number.isFinite(n) && n > 0 && n < 1e9);
+  return JSON.stringify([...new Set(ids)]);
+};
+
+const toJsonAny = (val) => {
+  if (val == null) return JSON.stringify([]);
+  if (typeof val === "string") {
+    try {
+      JSON.parse(val);
+      return val; // ya es JSON válido
+    } catch {
+      return JSON.stringify([val]); // texto simple -> array
+    }
+  }
+  return JSON.stringify(val);
+};
+
 async function ensureTables(pool) {
-  // tasks + task_todos
+  // Crea tablas si no existen (assigned_to ya en JSON para nuevas instalaciones)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS tasks (
       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -14,17 +54,14 @@ async function ensureTables(pool) {
       priority ENUM('Low','Medium','High') NOT NULL DEFAULT 'Medium',
       status   ENUM('Pending','In Progress','Completed') NOT NULL DEFAULT 'Pending',
       due_date DATETIME NOT NULL,
-      assigned_to BIGINT UNSIGNED NULL,
+      assigned_to JSON NULL,
       created_by  BIGINT UNSIGNED NULL,
-      attachments TEXT NULL, -- JSON string o ruta(s)
+      attachments TEXT NULL, -- JSON string o rutas
       progress TINYINT UNSIGNED NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      INDEX idx_assigned_to (assigned_to),
       INDEX idx_status (status),
       INDEX idx_due_date (due_date)
-      -- Opcional: FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
-      -- Opcional: FOREIGN KEY (created_by ) REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
@@ -41,6 +78,35 @@ async function ensureTables(pool) {
       CONSTRAINT fk_todos_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
+
+  // --- Migración suave desde esquemas viejos (BIGINT -> JSON) ---
+  // 1) Retira índice viejo si existiera
+  try {
+    await pool.query(`ALTER TABLE tasks DROP INDEX idx_assigned_to`);
+  } catch (_) {}
+
+  // 2) Intenta convertir a JSON directamente
+  try {
+    await pool.query(`ALTER TABLE tasks MODIFY COLUMN assigned_to JSON NULL`);
+  } catch (e1) {
+    // 3) Fallback: TEXT -> normaliza -> vuelve a JSON
+    try {
+      await pool.query(`ALTER TABLE tasks MODIFY COLUMN assigned_to TEXT NULL`);
+      await pool.query(
+        `UPDATE tasks
+         SET assigned_to = JSON_ARRAY(CAST(assigned_to AS UNSIGNED))
+         WHERE assigned_to REGEXP '^[0-9]+$'`
+      );
+      await pool.query(
+        `UPDATE tasks
+         SET assigned_to = '[]'
+         WHERE assigned_to IS NULL OR assigned_to = '' OR assigned_to = '9223372036854775808'`
+      );
+      await pool.query(`ALTER TABLE tasks MODIFY COLUMN assigned_to JSON NULL`);
+    } catch (e2) {
+      console.warn("assigned_to migration skipped:", e2.code || e2.message);
+    }
+  }
 }
 
 /** Crea una tarea (y sus todos opcionales) */
@@ -52,9 +118,9 @@ async function create(
     priority = "Medium",
     status = "Pending",
     dueDate,
-    assignedTo = null,
+    assignedTo = [], // ahora array
     createdBy = null,
-    attachments = null, // puedes pasar JSON.stringify([...])
+    attachments = [], // mejor JSON/array
     progress = 0,
     todoChecklist = [], // [{ text, completed? }]
   }
@@ -68,9 +134,9 @@ async function create(
       priority,
       status,
       new Date(dueDate),
-      assignedTo,
+      toJsonIds(assignedTo), // JSON
       createdBy,
-      attachments,
+      toJsonAny(attachments), // JSON string o array
       progress,
     ]
   );
@@ -98,9 +164,23 @@ async function findById(pool, id) {
     [id]
   );
   if (!task) return null;
+
+  // normaliza JSONs
+  task.assignedTo = parseJSON(task.assignedTo, []);
+  task.attachments = parseJSON(task.attachments, []);
+
   const [todos] = await pool.query(
-    `SELECT id, task_id AS taskId, text, completed, sort_order AS sortOrder, created_at AS createdAt, updated_at AS updatedAt
-     FROM task_todos WHERE task_id = ? ORDER BY sort_order, id`,
+    `SELECT
+       id,
+       task_id AS taskId,
+       text,
+       completed,
+       sort_order AS sortOrder,
+       created_at AS createdAt,
+       updated_at AS updatedAt
+     FROM task_todos
+     WHERE task_id = ?
+     ORDER BY sort_order, id`,
     [id]
   );
   task.todoChecklist = todos;
@@ -114,25 +194,36 @@ async function list(
 ) {
   const where = [];
   const args = [];
+
   if (status) {
     where.push("status = ?");
     args.push(status);
   }
-  if (assignedTo) {
-    where.push("assigned_to = ?");
-    args.push(assignedTo);
+  if (assignedTo !== undefined && assignedTo !== null && assignedTo !== "") {
+    where.push(
+      "assigned_to IS NOT NULL AND JSON_CONTAINS(assigned_to, JSON_ARRAY(CAST(? AS UNSIGNED)))"
+    );
+    args.push(Number(assignedTo));
   }
   if (search) {
     where.push("(title LIKE ? OR description LIKE ?)");
     args.push(`%${search}%`, `%${search}%`);
   }
+
   const sql =
     `SELECT ${TASK_FIELDS} FROM tasks` +
     (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
     ` ORDER BY due_date ASC LIMIT ? OFFSET ?`;
   args.push(Number(limit), Number(offset));
+
   const [rows] = await pool.query(sql, args);
-  return rows;
+
+  // parsea JSONs para respuesta coherente
+  return rows.map((r) => ({
+    ...r,
+    assignedTo: parseJSON(r.assignedTo, []),
+    attachments: parseJSON(r.attachments, []),
+  }));
 }
 
 /** Actualiza campos de la tarea (parcial) */
@@ -149,13 +240,24 @@ async function updateById(pool, id, patch) {
     attachments: "attachments",
     progress: "progress",
   };
+
   for (const k of Object.keys(map)) {
     if (patch[k] !== undefined) {
       fields.push(`${map[k]} = ?`);
-      values.push(k === "dueDate" ? new Date(patch[k]) : patch[k]);
+      if (k === "dueDate") {
+        values.push(new Date(patch[k]));
+      } else if (k === "assignedTo") {
+        values.push(toJsonIds(patch[k])); // siempre JSON
+      } else if (k === "attachments") {
+        values.push(toJsonAny(patch[k])); // JSON/array/string
+      } else {
+        values.push(patch[k]);
+      }
     }
   }
+
   if (!fields.length) return findById(pool, id);
+
   values.push(id);
   await pool.execute(
     `UPDATE tasks SET ${fields.join(", ")} WHERE id = ?`,

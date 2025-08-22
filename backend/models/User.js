@@ -186,19 +186,32 @@ async function listWithTaskCounts(
       u.id, u.name, u.email, u.role,
       u.profile_image_url AS profileImageUrl,
       u.created_at AS createdAt, u.updated_at AS updatedAt,
-      COALESCE(SUM(CASE WHEN t.status='Pending' THEN 1 ELSE 0 END),0)       AS pendingTasks,
-      COALESCE(SUM(CASE WHEN t.status='In Progress' THEN 1 ELSE 0 END),0)  AS inProgressTasks,
-      COALESCE(SUM(CASE WHEN t.status='Completed' THEN 1 ELSE 0 END),0)    AS completedTasks
+
+      COALESCE(SUM(CASE WHEN t.status='Pending' THEN 1 ELSE 0 END),0)        AS pendingTasks,
+      COALESCE(SUM(CASE WHEN t.status='In Progress' THEN 1 ELSE 0 END),0)    AS inProgressTasks,
+      COALESCE(SUM(CASE WHEN t.status='Completed' THEN 1 ELSE 0 END),0)      AS completedTasks,
+      COALESCE(SUM(CASE WHEN t.status <> 'Completed'
+                         AND DATE(t.due_date) < CURDATE() THEN 1 ELSE 0 END),0) AS overdueTasks
     FROM users u
-    LEFT JOIN tasks t ON t.assigned_to = u.id
+    LEFT JOIN tasks t
+      ON t.assigned_to IS NOT NULL
+     AND JSON_CONTAINS(t.assigned_to, JSON_ARRAY(u.id))  -- 👈 match por JSON
+
     ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-    GROUP BY u.id
+    GROUP BY u.id, u.name, u.email, u.role, u.profile_image_url, u.created_at, u.updated_at
     ORDER BY u.id DESC
     LIMIT ? OFFSET ?
   `;
   args.push(Number(limit), Number(offset));
+
   const [rows] = await pool.query(sql, args);
-  return rows;
+  return rows.map((r) => ({
+    ...r,
+    pendingTasks: Number(r.pendingTasks) || 0,
+    inProgressTasks: Number(r.inProgressTasks) || 0,
+    completedTasks: Number(r.completedTasks) || 0,
+    overdueTasks: Number(r.overdueTasks) || 0,
+  }));
 }
 
 /** Un usuario + contadores de tareas */
@@ -208,17 +221,30 @@ async function findWithTaskCounts(pool, id) {
       u.id, u.name, u.email, u.role,
       u.profile_image_url AS profileImageUrl,
       u.created_at AS createdAt, u.updated_at AS updatedAt,
-      COALESCE(SUM(CASE WHEN t.status='Pending' THEN 1 ELSE 0 END),0)       AS pendingTasks,
-      COALESCE(SUM(CASE WHEN t.status='In Progress' THEN 1 ELSE 0 END),0)  AS inProgressTasks,
-      COALESCE(SUM(CASE WHEN t.status='Completed' THEN 1 ELSE 0 END),0)    AS completedTasks
+      COALESCE(SUM(CASE WHEN t.status='Pending' THEN 1 ELSE 0 END),0)        AS pendingTasks,
+      COALESCE(SUM(CASE WHEN t.status='In Progress' THEN 1 ELSE 0 END),0)    AS inProgressTasks,
+      COALESCE(SUM(CASE WHEN t.status='Completed' THEN 1 ELSE 0 END),0)      AS completedTasks,
+      COALESCE(SUM(CASE WHEN t.status <> 'Completed'
+                         AND DATE(t.due_date) < CURDATE() THEN 1 ELSE 0 END),0) AS overdueTasks
     FROM users u
-    LEFT JOIN tasks t ON t.assigned_to = u.id
+    LEFT JOIN tasks t
+      ON t.assigned_to IS NOT NULL
+     AND JSON_CONTAINS(t.assigned_to, JSON_ARRAY(u.id))
     WHERE u.id = ?
-    GROUP BY u.id
+    GROUP BY u.id, u.name, u.email, u.role, u.profile_image_url, u.created_at, u.updated_at
     LIMIT 1
   `;
   const [rows] = await pool.query(sql, [id]);
-  return rows[0] || null;
+  const r = rows[0];
+  return r
+    ? {
+        ...r,
+        pendingTasks: Number(r.pendingTasks) || 0,
+        inProgressTasks: Number(r.inProgressTasks) || 0,
+        completedTasks: Number(r.completedTasks) || 0,
+        overdueTasks: Number(r.overdueTasks) || 0,
+      }
+    : null;
 }
 
 module.exports = {
