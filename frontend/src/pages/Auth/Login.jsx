@@ -8,7 +8,7 @@ import axiosInstance from "../../utils/axiosInstance";
 import { API_PATHS } from "../../utils/apiPaths";
 import { UserContext } from "../../context/UserContext";
 
-const Login = ({ defaultEmail = "", defaultPassword = "" }) => {
+const Login = ({ defaultEmail = "admin@example.com", defaultPassword = "ChangeMe!2025" }) => {
   const [initialLoading, setInitialLoading] = useState(true);
   const [redirectLoading, setRedirectLoading] = useState(false);
 

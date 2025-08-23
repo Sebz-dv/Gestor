@@ -149,53 +149,76 @@ const getTasks = async (req, res, next) => {
 
     if (!isAdmin(req)) {
       where.push(
-        `assigned_to IS NOT NULL AND JSON_CONTAINS(assigned_to, JSON_ARRAY(?))`
+        `t.assigned_to IS NOT NULL AND JSON_CONTAINS(t.assigned_to, JSON_ARRAY(?))`
       );
       args.push(Number(req.user.id));
     } else if (assignedTo) {
       where.push(
-        `assigned_to IS NOT NULL AND JSON_CONTAINS(assigned_to, JSON_ARRAY(?))`
+        `t.assigned_to IS NOT NULL AND JSON_CONTAINS(t.assigned_to, JSON_ARRAY(?))`
       );
       args.push(Number(assignedTo));
     }
 
     if (status && VALID_STATUSES.has(status)) {
-      where.push("status = ?");
+      where.push("t.status = ?");
       args.push(status);
     }
     if (priority && VALID_PRIORITIES.has(priority)) {
-      where.push("priority = ?");
+      where.push("t.priority = ?");
       args.push(priority);
     }
     if (search) {
-      where.push("(title LIKE ? OR description LIKE ?)");
+      where.push("(t.title LIKE ? OR t.description LIKE ?)");
       args.push(`%${search}%`, `%${search}%`);
     }
     if (dueFrom) {
-      where.push("due_date >= ?");
+      where.push("t.due_date >= ?");
       args.push(new Date(dueFrom));
     }
     if (dueTo) {
-      where.push("due_date <= ?");
+      where.push("t.due_date <= ?");
       args.push(new Date(dueTo));
     }
 
-    const sql = `SELECT id, title, description, priority, status, due_date AS dueDate,
-              assigned_to AS assignedTo, created_by AS createdBy, attachments,
-              progress, created_at AS createdAt, updated_at AS updatedAt
-       FROM tasks
-       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-       ORDER BY due_date ASC
-       LIMIT ? OFFSET ?`;
+    const sql = `
+      SELECT
+        t.id,
+        t.title,
+        t.description,
+        t.priority,
+        t.status,
+        t.due_date     AS dueDate,
+        t.assigned_to  AS assignedTo,
+        t.created_by   AS createdBy,
+        t.attachments,
+        t.progress,
+        t.created_at   AS createdAt,
+        t.updated_at   AS updatedAt,
+        COALESCE(agg.todoCount, 0)            AS todoCount,
+        COALESCE(agg.completedTodoCount, 0)   AS completedTodoCount
+      FROM tasks t
+      LEFT JOIN (
+        SELECT
+          td.task_id,
+          COUNT(*) AS todoCount,
+          SUM(CASE WHEN td.completed = 1 THEN 1 ELSE 0 END) AS completedTodoCount
+        FROM task_todos td
+        GROUP BY td.task_id
+      ) agg ON agg.task_id = t.id
+      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+      ORDER BY t.due_date ASC
+      LIMIT ? OFFSET ?
+    `;
     args.push(Number(limit), Number(offset));
 
     const [rows] = await pool.query(sql, args);
 
-    // Normaliza JSONs para el front
     const normalized = rows.map((r) => ({
       ...r,
       assignedTo: parseJSON(r.assignedTo, []),
       attachments: parseJSON(r.attachments, []),
+      todoTotalCount: Number(r.todoCount || 0),
+      completedTodoCount: Number(r.completedTodoCount || 0),
     }));
 
     res.json(normalized);
@@ -216,7 +239,8 @@ const getTaskById = async (req, res, next) => {
     if (!task) return res.status(404).json({ message: "Task no encontrada" });
 
     const admin = isAdmin(req);
-    const assignee = isAssignee(task, Number(req.user.id));
+    theAssignee = isAssignee(task, Number(req.user.id));
+    const assignee = theAssignee; // para consistencia
     const creator = Number(task.createdBy) === Number(req.user.id);
 
     if (!admin && !assignee && !creator) {
@@ -551,6 +575,90 @@ const updateTaskChecklist = async (req, res, next) => {
   }
 };
 
+/* =================
+ *   TIME TRACKING
+ * ================= */
+
+// START timer
+const startTaskTimer = async (req, res, next) => {
+  try {
+    const pool = req.app.locals.db;
+    const taskId = Number(req.params.id);
+    if (!Number.isFinite(taskId))
+      return res.status(400).json({ message: "ID inválido" });
+
+    const task = await Task.findById(pool, taskId);
+    if (!task) return res.status(404).json({ message: "Task no encontrada" });
+
+    const admin = isAdmin(req);
+    const assignee = isAssignee(task, Number(req.user.id));
+    const creator = Number(task.createdBy) === Number(req.user.id);
+    if (!admin && !assignee && !creator)
+      return res.status(403).json({ message: "No autorizado" });
+
+    await Task.startTaskTimer(pool, taskId, Number(req.user.id));
+    const summary = await Task.getTaskTimeSummary(pool, taskId);
+    res.json({ message: "Timer iniciado", ...summary });
+  } catch (err) {
+    if (String(err.message || "").includes("temporizador activo")) {
+      return res.status(409).json({ message: err.message });
+    }
+    next(err);
+  }
+};
+
+// STOP timer
+const stopTaskTimer = async (req, res, next) => {
+  try {
+    const pool = req.app.locals.db;
+    const taskId = Number(req.params.id);
+    if (!Number.isFinite(taskId))
+      return res.status(400).json({ message: "ID inválido" });
+
+    const task = await Task.findById(pool, taskId);
+    if (!task) return res.status(404).json({ message: "Task no encontrada" });
+
+    const admin = isAdmin(req);
+    const assignee = isAssignee(task, Number(req.user.id));
+    const creator = Number(task.createdBy) === Number(req.user.id);
+    if (!admin && !assignee && !creator)
+      return res.status(403).json({ message: "No autorizado" });
+
+    const secs = await Task.stopTaskTimer(pool, taskId, Number(req.user.id));
+    const summary = await Task.getTaskTimeSummary(pool, taskId);
+    res.json({ message: "Timer detenido", lastSpanSeconds: secs, ...summary });
+  } catch (err) {
+    if (String(err.message || "").includes("No hay temporizador activo")) {
+      return res.status(409).json({ message: err.message });
+    }
+    next(err);
+  }
+};
+
+// SUMMARY
+const getTaskTime = async (req, res, next) => {
+  try {
+    const pool = req.app.locals.db;
+    const taskId = Number(req.params.id);
+    if (!Number.isFinite(taskId))
+      return res.status(400).json({ message: "ID inválido" });
+
+    const task = await Task.findById(pool, taskId);
+    if (!task) return res.status(404).json({ message: "Task no encontrada" });
+
+    const admin = isAdmin(req);
+    const assignee = isAssignee(task, Number(req.user.id));
+    const creator = Number(task.createdBy) === Number(req.user.id);
+    if (!admin && !assignee && !creator)
+      return res.status(403).json({ message: "No autorizado" });
+
+    const summary = await Task.getTaskTimeSummary(pool, taskId);
+    res.json(summary);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getDashboardData,
   getUserDashboardData,
@@ -561,4 +669,8 @@ module.exports = {
   deleteTask,
   updateTaskStatus,
   updateTaskChecklist,
+  // time tracking
+  startTaskTimer,
+  stopTaskTimer,
+  getTaskTime,
 };

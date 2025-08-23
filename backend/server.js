@@ -13,7 +13,9 @@ const taskRoutes = require("./routes/taskRoutes");
 const reportRoutes = require("./routes/reportRoutes");
 const User = require("./models/User");
 const Task = require("./models/Task");
-
+// server.js (arriba)
+const taskFilesRoutes = require("./routes/taskFilesRoutes");
+const TaskFile = require("./models/TaskFile");
 const app = express();
 
 // CORS
@@ -66,6 +68,10 @@ app.post("/api/upload-image", upload.single("image"), (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/tasks", taskRoutes);
+
+// Sub-rutas de archivos por tarea
+app.use("/api/tasks/:id/files", taskFilesRoutes);
+
 app.use("/api/reports", reportRoutes);
 
 // 404
@@ -80,11 +86,22 @@ app.use((err, _req, res, _next) => {
 });
 
 // Boot
+// Boot
 (async () => {
   const db = await connectDB();
   app.locals.db = db;
 
-  await Promise.all([User.ensureTable(db), Task.ensureTables(db)]);
+  await Promise.all([
+    User.ensureTable(db),
+    Task.ensureTables(db),
+    TaskFile.ensureTable(db), // asegurar tabla task_files
+  ]);
+
+  // Asegura carpeta /uploads/tasks
+  const tasksUploadsDir = path.join(__dirname, "uploads", "tasks");
+  if (!fs.existsSync(tasksUploadsDir))
+    fs.mkdirSync(tasksUploadsDir, { recursive: true });
+
   const seeded = await User.ensureAdmin(db);
   if (seeded) {
     console.log("✅ Admin creado:", { id: seeded.id, email: seeded.email });

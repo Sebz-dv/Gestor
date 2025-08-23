@@ -161,7 +161,6 @@ const CreateTask = () => {
     setError("");
     try {
       const path = API_PATHS.TASKS.GET_TASK_BY_ID(id);
-      console.log("[GET]", axiosInstance.defaults.baseURL + path);
       const { data } = await axiosInstance.get(path);
 
       setCurrentTask(data);
@@ -184,7 +183,6 @@ const CreateTask = () => {
   };
 
   useEffect(() => {
-    console.log(`[CreateTask] modo: ${taskId ? "editar" : "crear"}`, { routeId, stateId, taskId });
     if (taskId) fetchTask(taskId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
@@ -193,13 +191,13 @@ const CreateTask = () => {
     e?.preventDefault();
     setError("");
 
-    if (!taskData.title?.trim()) return setError("Title is required.");
-    if (!taskData.description?.trim()) return setError("Description is required.");
-    if (!taskData.dueDate) return setError("Due date is required.");
+    if (!taskData.title?.trim()) return setError("El título es obligatorio.");
+    if (!taskData.description?.trim()) return setError("La descripción es obligatoria.");
+    if (!taskData.dueDate) return setError("La fecha de vencimiento es obligatoria.");
     if (!Array.isArray(taskData.assignedTo) || taskData.assignedTo.length === 0)
-      return setError("Selected users are required.");
+      return setError("Debes asignar al menos una persona.");
     if (!Array.isArray(taskData.todoChecklist) || taskData.todoChecklist.length === 0)
-      return setError("Add at least one task to the checklist.");
+      return setError("Agrega al menos un ítem al checklist.");
 
     if (taskId) {
       await updateTask();
@@ -219,16 +217,15 @@ const CreateTask = () => {
         attachments: toApiAttachments(taskData.attachments),
       };
 
-      console.log("[POST]", axiosInstance.defaults.baseURL + API_PATHS.TASKS.CREATE_TASK, payload);
       await axiosInstance.post(API_PATHS.TASKS.CREATE_TASK, payload);
 
-      toast.success("Task created successfully");
+      toast.success("Tarea creada correctamente");
       clearData();
       navigate("/admin/tasks");
     } catch (err) {
       console.error(err);
-      setError("Failed to create task.");
-      toast.error("Failed to create task.");
+      setError("No se pudo crear la tarea.");
+      toast.error("No se pudo crear la tarea.");
     } finally {
       setLoading(false);
     }
@@ -258,14 +255,13 @@ const CreateTask = () => {
       };
 
       const path = API_PATHS.TASKS.UPDATE_TASK(taskId);
-      console.log("[PUT]", axiosInstance.defaults.baseURL + path, payload);
       await axiosInstance.put(path, payload);
 
-      toast.success("Task updated successfully");
+      toast.success("Tarea actualizada correctamente");
     } catch (err) {
       console.error(err);
-      setError("Failed to update task.");
-      toast.error("Failed to update task.");
+      setError("No se pudo actualizar la tarea.");
+      toast.error("No se pudo actualizar la tarea.");
     } finally {
       setLoading(false);
     }
@@ -277,7 +273,6 @@ const CreateTask = () => {
     setError("");
     try {
       const path = API_PATHS.TASKS.DELETE_TASK(taskId);
-      console.log("[DELETE]", axiosInstance.defaults.baseURL + path);
       await axiosInstance.delete(path);
       toast.success("Tarea eliminada");
       navigate("/admin/tasks");
@@ -292,16 +287,16 @@ const CreateTask = () => {
   };
 
   return (
-    <DashboardLayout activeMenu="Create Task">
+    <DashboardLayout activeMenu={taskId ? "Actualizar Tarea" : "Crear Tarea"}>
       <div className="mt-5">
         {/* Header de página */}
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h1 className="text-xl md:text-2xl font-semibold text-slate-900 dark:text-slate-100">
-              {taskId ? "Actualizar Tarea" : "Crear Tarea"}
+              {taskId ? "Actualizar tarea" : "Crear tarea"}
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Define la información, asigna responsables y adjunta archivos.
+              Completa la información, asigna responsables y adjunta archivos.
             </p>
           </div>
 
@@ -309,8 +304,8 @@ const CreateTask = () => {
             <button
               type="button"
               onClick={() => setOpenDeleteAlert(true)}
-              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-rose-600 bg-rose-50 rounded px-3 py-2 border border-rose-200 hover:border-rose-300 transition-colors
-                         dark:text-rose-300 dark:bg-rose-900/20 dark:border-rose-800/50 dark:hover:border-rose-700"
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-rose-700 bg-rose-50 rounded-lg px-3 py-2 border border-rose-200 hover:bg-rose-100 transition-colors
+                         dark:text-rose-300 dark:bg-rose-900/20 dark:border-rose-800/50 dark:hover:bg-rose-900/30"
               disabled={loading}
             >
               <LuTrash2 className="text-base" /> Eliminar
@@ -322,7 +317,7 @@ const CreateTask = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Card principal */}
             <div className="md:col-span-3">
-              <div className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div className="p-5 border-b border-slate-200 dark:border-slate-800">
                   <SectionTitle
                     title="Información general"
@@ -342,13 +337,14 @@ const CreateTask = () => {
                           Título
                         </label>
                         <input
-                          placeholder="Crear App UI"
+                          placeholder="Ej. Diseñar la pantalla de inicio"
                           className="form-input mt-1"
                           value={taskData.title}
                           onChange={(e) => handleValueChange("title", e.target.value)}
                           disabled={loading}
+                          aria-label="Título de la tarea"
                         />
-                        <FieldHint>Un título corto y claro funciona mejor.</FieldHint>
+                        <FieldHint>Usa un título corto, directo y fácil de reconocer.</FieldHint>
                       </div>
 
                       <div className="mt-3">
@@ -356,14 +352,15 @@ const CreateTask = () => {
                           Descripción
                         </label>
                         <textarea
-                          placeholder="Describe la tarea"
+                          placeholder="Describe objetivos, criterios de aceptación, consideraciones, etc."
                           className="form-input mt-1"
                           rows={4}
                           value={taskData.description}
                           onChange={(e) => handleValueChange("description", e.target.value)}
                           disabled={loading}
+                          aria-label="Descripción de la tarea"
                         />
-                        <FieldHint>Puedes pegar listas, requisitos o criterios de aceptación.</FieldHint>
+                        <FieldHint>Puedes pegar listas, requisitos o links de referencia.</FieldHint>
                       </div>
                     </>
                   )}
@@ -379,27 +376,27 @@ const CreateTask = () => {
                 <div className="p-5 border-b border-slate-200 dark:border-slate-800">
                   <SectionTitle
                     title="Planificación y responsables"
-                    desc="Define prioridad, fecha y personas asignadas."
+                    desc="Define prioridad, fecha de vencimiento y personas asignadas."
                   />
 
                   <div className="grid grid-cols-12 gap-4">
                     <div className="col-span-6 md:col-span-4">
                       <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                        Priority
+                        Prioridad
                       </label>
                       <SelectDropdown
                         options={PRIORITY_DATA}
                         value={taskData.priority}
                         onChange={(value) => handleValueChange("priority", value)}
-                        placeholder="Select Priority"
+                        placeholder="Selecciona una prioridad"
                         disabled={loading}
                       />
-                      <FieldHint>Low si no es urgente; High para prioridad operativa.</FieldHint>
+                      <FieldHint>“Alta” para urgencias operativas. “Baja” si puede esperar.</FieldHint>
                     </div>
 
                     <div className="col-span-6 md:col-span-4">
                       <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                        Due Date
+                        Fecha de vencimiento
                       </label>
                       <input
                         type="date"
@@ -407,13 +404,14 @@ const CreateTask = () => {
                         value={taskData.dueDate || ""}
                         onChange={({ target }) => handleValueChange("dueDate", target.value)}
                         disabled={loading}
+                        aria-label="Fecha de vencimiento"
                       />
-                      <FieldHint>Usa una fecha realista para evitar atrasos.</FieldHint>
+                      <FieldHint>Elige una fecha realista para evitar atrasos.</FieldHint>
                     </div>
 
                     <div className="col-span-12">
                       <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                        Assign To
+                        Asignar a
                       </label>
                       <SelectUsers
                         selectedUsers={taskData.assignedTo}
@@ -445,7 +443,7 @@ const CreateTask = () => {
 
                 {/* Barra de acciones sticky dentro de la card */}
                 <div className="sticky bottom-0 border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/70
-                                dark:border-slate-800 dark:bg-slate-900/90 dark:supports-[backdrop-filter]:bg-slate-900/70">
+                                dark:border-slate-800 dark:bg-slate-900/90 dark:supports-[backdrop-filter]:bg-slate-900/70 rounded-b-2xl">
                   <div className="p-4 flex items-center justify-end gap-2">
                     <button
                       type="button"
@@ -471,31 +469,31 @@ const CreateTask = () => {
             {/* Columna lateral */}
             <div className="md:col-span-1">
               <div className="sticky top-24">
-                <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 dark:border-slate-800 dark:bg-slate-900">
+                <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 dark:border-slate-800 dark:bg-slate-900">
                   <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Resumen</h4>
                   <div className="mt-3 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
-                    <div>
-                      <span className="text-slate-500 dark:text-slate-400">Priority:</span>{" "}
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 dark:text-slate-400">Prioridad</span>
                       <span className="font-medium">{taskData.priority || "—"}</span>
                     </div>
-                    <div>
-                      <span className="text-slate-500 dark:text-slate-400">Due Date:</span>{" "}
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 dark:text-slate-400">Vence</span>
                       <span className="font-medium">{taskData.dueDate || "—"}</span>
                     </div>
-                    <div>
-                      <span className="text-slate-500 dark:text-slate-400">Asignados:</span>{" "}
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 dark:text-slate-400">Asignados</span>
                       <span className="font-medium">
                         {Array.isArray(taskData.assignedTo) ? taskData.assignedTo.length : 0}
                       </span>
                     </div>
-                    <div>
-                      <span className="text-slate-500 dark:text-slate-400">Checklist:</span>{" "}
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 dark:text-slate-400">Checklist</span>
                       <span className="font-medium">
                         {Array.isArray(taskData.todoChecklist) ? taskData.todoChecklist.length : 0}
                       </span>
                     </div>
-                    <div>
-                      <span className="text-slate-500 dark:text-slate-400">Adjuntos:</span>{" "}
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 dark:text-slate-400">Adjuntos</span>
                       <span className="font-medium">
                         {Array.isArray(taskData.attachments) ? taskData.attachments.length : 0}
                       </span>
@@ -516,7 +514,7 @@ const CreateTask = () => {
             aria-labelledby="delete-title"
             aria-describedby="delete-desc"
           >
-            <div className="bg-white dark:bg-slate-900 rounded-xl p-5 w-full max-w-sm shadow-2xl border border-slate-200 dark:border-slate-800">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-sm shadow-2xl border border-slate-200 dark:border-slate-800">
               <h4 id="delete-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
                 Eliminar tarea
               </h4>

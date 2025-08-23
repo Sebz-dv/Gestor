@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef, useContext } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import DashboardLayout from "../../components/layouts/DashboardLayout";
 import AvatarGroup from "../../components/AvatarGroup";
 import axiosInstance from "../../utils/axiosInstance";
 import { API_PATHS } from "../../utils/apiPaths";
+import { UserContext } from "../../context/UserContext";
 
 /* ----------------- Helpers ----------------- */
 const normalizeUser = (u = {}) => ({
@@ -26,7 +27,6 @@ const normalizeUser = (u = {}) => ({
 
 const isTrue = (v) => v === true || v === 1 || v === "1" || v === "true";
 
-/* Derivación & persistencia */
 const deriveStatusAndProgress = (items = []) => {
   const total = Array.isArray(items) ? items.length : 0;
   const done = Array.isArray(items) ? items.filter((i) => isTrue(i?.completed)).length : 0;
@@ -55,10 +55,40 @@ const persistStatusAndProgress = async (taskId, status, progress) => {
   }
 };
 
+const pad2 = (n) => String(n).padStart(2, "0");
+const fmtHMS = (seconds = 0) => {
+  const s = Math.max(0, Number(seconds) | 0);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${pad2(h)}:${pad2(m)}:${pad2(sec)}`;
+};
+
+// ==== FILES: helpers ====
+const fmtBytes = (b = 0) => {
+  const bytes = Number(b) || 0;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+};
+const toArray = (x) => (Array.isArray(x) ? x : x == null ? [] : [x]);
+const extractIds = (arr) =>
+  toArray(arr)
+    .map((a) =>
+      typeof a === "object" && a
+        ? Number(a.id ?? a.user_id ?? a.uid ?? a.value ?? NaN)
+        : Number(a)
+    )
+    .filter((n) => Number.isFinite(n));
+
 /* ---------- View ---------- */
 const ViewTaskDetails = () => {
   const params = useParams(); // { id } según /user/tasks-details/:id
   const location = useLocation();
+  const { user } = useContext(UserContext) || {};
+  const myUserId = Number(user?.id ?? user?.user_id ?? 0);
+  const amAdmin = String(user?.role || "").toLowerCase() === "admin";
 
   // Estados
   const [task, setTask] = useState(null);
@@ -68,6 +98,20 @@ const ViewTaskDetails = () => {
   // Avatares resueltos (sin /api/users admin-only)
   const [avatarUrls, setAvatarUrls] = useState([]);
   const avatarCacheRef = useRef(new Map()); // id -> url
+
+  // Time tracking
+  const [timeTotalSeconds, setTimeTotalSeconds] = useState(0); // total acumulado
+  const [isRunning, setIsRunning] = useState(false);           // ¿yo tengo timer activo en esta tarea?
+  const [myStartAt, setMyStartAt] = useState(null);            // Date de inicio de MI timer
+  const tickRef = useRef(null);                                // interval id
+
+  // ==== FILES: state ====
+  const [files, setFiles] = useState([]);           // lista de archivos de la tarea
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
+  const fileInputRef = useRef(null);
 
   // Resolver ID desde: /:id | state.taskId | ?id=123
   const effectiveId = useMemo(() => {
@@ -90,7 +134,67 @@ const ViewTaskDetails = () => {
     }
   };
 
-  // Cargar detalle de tarea
+  // --- Cargar resumen de tiempo ---
+  const fetchTimeSummary = useCallback(async (taskId) => {
+    try {
+      const { data } = await axiosInstance.get(API_PATHS.TASKS.GET_TASK_TIME(taskId));
+      const total = Number(data?.totalSeconds ?? 0);
+      const active = Array.isArray(data?.activeTimers) ? data.activeTimers : [];
+      setTimeTotalSeconds(total);
+
+      // ¿Yo tengo un timer activo?
+      const mine = active.find((t) => Number(t.userId) === myUserId);
+      if (mine) {
+        setIsRunning(true);
+        setMyStartAt(mine.startAt ? new Date(mine.startAt) : new Date());
+      } else {
+        setIsRunning(false);
+        setMyStartAt(null);
+      }
+    } catch (e) {
+      console.warn("[ViewTaskDetails] GET /timer fallo:", e?.response?.data || e?.message);
+    }
+  }, [myUserId]);
+
+  // ==== FILES: API paths per taskId ====
+  const fileAPI = useMemo(() => {
+    const id = Number(effectiveId);
+    return {
+      list: API_PATHS?.TASK_FILES?.LIST?.(id) || `/api/tasks/${id}/files`,
+      upload: API_PATHS?.TASK_FILES?.UPLOAD?.(id) || `/api/tasks/${id}/files`,
+      download: (fileId) =>
+        (API_PATHS?.TASK_FILES?.DOWNLOAD?.(id, fileId)) || `/api/tasks/${id}/files/${fileId}/download`,
+      remove: (fileId) =>
+        (API_PATHS?.TASK_FILES?.DELETE?.(id, fileId)) || `/api/tasks/${id}/files/${fileId}`,
+    };
+  }, [effectiveId]);
+
+  // ==== FILES: permisos front (admin, creador o asignado) ====
+  const amCreator = useMemo(
+    () => (task ? Number(task?.createdBy) === myUserId : false),
+    [task, myUserId]
+  );
+  const amAssignee = useMemo(() => {
+    const ids = extractIds(task?.assignedTo);
+    return ids.includes(myUserId);
+  }, [task?.assignedTo, myUserId]);
+
+  const canManageFiles = amAdmin || amCreator || amAssignee;
+
+  // --- Cargar detalle de tarea
+  const fetchTaskFiles = useCallback(async () => {
+    try {
+      setFilesLoading(true);
+      const { data } = await axiosInstance.get(fileAPI.list);
+      setFiles(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.warn("[ViewTaskDetails] GET files fallo:", e?.response?.data || e?.message);
+      setFiles([]);
+    } finally {
+      setFilesLoading(false);
+    }
+  }, [fileAPI.list]);
+
   const getTaskDetailByID = useCallback(async (id) => {
     if (!id) {
       setTaskErr("No se recibió un ID de tarea en la ruta/estado/query.");
@@ -114,6 +218,9 @@ const ViewTaskDetails = () => {
       if (status !== taskInfo?.status || progress !== (taskInfo?.progress ?? 0)) {
         persistStatusAndProgress(taskInfo.id, status, progress);
       }
+
+      await fetchTimeSummary(Number(id));
+      await fetchTaskFiles(); // ==== FILES: carga lista
     } catch (error) {
       console.groupCollapsed("[ViewTaskDetails] Error en fetch");
       console.error("Axios error =>", error);
@@ -132,11 +239,10 @@ const ViewTaskDetails = () => {
     } finally {
       setLoadingTask(false);
     }
-  }, []);
+  }, [fetchTimeSummary, fetchTaskFiles]); // ✅ incluir fetchTaskFiles
 
   // --- Resolución on-demand de avatares (sin /api/users) ---
   const fetchUserProfileImageById = useCallback(async (id) => {
-    // cache
     const cached = avatarCacheRef.current.get(String(id));
     if (cached !== undefined) return cached;
 
@@ -147,16 +253,14 @@ const ViewTaskDetails = () => {
 
     try {
       const res = await axiosInstance.get(url);
-      // el backend puede responder { user } o el objeto directo
       const rawUser = res?.data?.user ?? res?.data ?? null;
       const user = normalizeUser(rawUser || {});
       const out = user.profileImageUrl || "";
       avatarCacheRef.current.set(String(id), out);
       return out;
     } catch (err) {
-      // Si también es 403 aquí, devolvemos vacío (no avatar) y seguimos
       console.warn("[ViewTaskDetails] No se pudo obtener usuario", id, err?.response?.data || err?.message);
-      avatarCacheRef.current.set(String(id), ""); // cachea vacío para no insistir
+      avatarCacheRef.current.set(String(id), "");
       return "";
     }
   }, []);
@@ -168,7 +272,6 @@ const ViewTaskDetails = () => {
       return;
     }
 
-    // Quitamos duplicados conservando orden
     const unique = [];
     const seen = new Set();
     for (const a of list) {
@@ -184,29 +287,116 @@ const ViewTaskDetails = () => {
 
     const urls = await Promise.all(
       unique.map(async (a) => {
-        // 1) URL directa
         if (typeof a === "string" && /^https?:\/\//i.test(a)) return a;
 
-        // 2) Objeto usuario con foto
         if (a && typeof a === "object") {
           const direct =
             a.profileImageUrl || a.avatar || a.photoURL || a.image || a.picture || "";
           if (direct) return direct;
 
-          // 2.b) Objeto con id pero sin foto -> intento GET by ID
           const idVal = a.id ?? a.user_id ?? a.uid ?? a.email ?? null;
           if (idVal != null) return fetchUserProfileImageById(idVal);
 
           return "";
         }
 
-        // 3) ID (número o string)
         return fetchUserProfileImageById(a);
       })
     );
 
     setAvatarUrls(urls.filter(Boolean));
   }, [fetchUserProfileImageById]);
+
+  // --- Start/Stop handlers ---
+  const handleStartTimer = useCallback(async () => {
+    if (!task?.id) return;
+    try {
+      await axiosInstance.post(API_PATHS.TASKS.START_TASK_TIMER(task.id));
+      setIsRunning(true);
+      const now = new Date();
+      setMyStartAt(now);
+      await fetchTimeSummary(Number(task.id));
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message;
+      console.warn("[ViewTaskDetails] start timer error:", msg);
+      await fetchTimeSummary(Number(task.id));
+    }
+  }, [task?.id, fetchTimeSummary]);
+
+  const handleStopTimer = useCallback(async () => {
+    if (!task?.id) return;
+    try {
+      await axiosInstance.post(API_PATHS.TASKS.STOP_TASK_TIMER(task.id));
+      setIsRunning(false);
+      setMyStartAt(null);
+      await fetchTimeSummary(Number(task.id));
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message;
+      console.warn("[ViewTaskDetails] stop timer error:", msg);
+      await fetchTimeSummary(Number(task.id));
+    }
+  }, [task?.id, fetchTimeSummary]);
+
+  // ==== FILES: API calls ==== (firma sin taskId para evitar warning)
+  const handleFileSelected = useCallback((e) => {
+    const f = e?.target?.files?.[0];
+    setSelectedFile(f || null);
+    setUploadPct(0);
+  }, []);
+
+  const handleUpload = useCallback(async () => {
+    if (!selectedFile || !task?.id) return;
+    try {
+      setUploading(true);
+      setUploadPct(0);
+      const form = new FormData();
+      form.append("file", selectedFile);
+      await axiosInstance.post(fileAPI.upload, form, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (ev) => {
+          if (!ev.total) return;
+          setUploadPct(Math.round((ev.loaded * 100) / ev.total));
+        },
+      });
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      await fetchTaskFiles();
+    } catch (e) {
+      console.warn("[ViewTaskDetails] UPLOAD fallo:", e?.response?.data || e?.message);
+    } finally {
+      setUploading(false);
+      setUploadPct(0);
+    }
+  }, [selectedFile, task?.id, fileAPI.upload, fetchTaskFiles]);
+
+  const handleDownload = useCallback(async (fileId, originalName = "archivo") => {
+    try {
+      const res = await axiosInstance.get(fileAPI.download(fileId), { responseType: "blob" });
+      const blob = new Blob([res.data]);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = originalName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      console.warn("[ViewTaskDetails] DOWNLOAD fallo:", e?.response?.data || e?.message);
+    }
+  }, [fileAPI]);
+
+  const handleDelete = useCallback(async (fileId) => {
+    if (!fileId || !task?.id) return;
+    const ok = window.confirm("¿Eliminar este archivo definitivamente?");
+    if (!ok) return;
+    try {
+      await axiosInstance.delete(fileAPI.remove(fileId));
+      await fetchTaskFiles();
+    } catch (e) {
+      console.warn("[ViewTaskDetails] DELETE fallo:", e?.response?.data || e?.message);
+    }
+  }, [task?.id, fileAPI, fetchTaskFiles]);
 
   /* ----------------- Effects ----------------- */
   useEffect(() => {
@@ -216,6 +406,39 @@ const ViewTaskDetails = () => {
   useEffect(() => {
     resolveAvatarsFromAssignedTo(task?.assignedTo);
   }, [task?.assignedTo, resolveAvatarsFromAssignedTo]);
+
+  // Ticker: suma en vivo mientras está corriendo
+  useEffect(() => {
+    if (tickRef.current) {
+      clearInterval(tickRef.current);
+      tickRef.current = null;
+    }
+    if (isRunning && myStartAt) {
+      tickRef.current = setInterval(() => {
+        const base = Number(timeTotalSeconds || 0);
+        const delta = Math.floor((Date.now() - new Date(myStartAt).getTime()) / 1000);
+        const merged = base + Math.max(0, delta);
+        const el = document.getElementById("task-time-display");
+        if (el) el.textContent = fmtHMS(merged);
+      }, 1000);
+    } else {
+      const el = document.getElementById("task-time-display");
+      if (el) el.textContent = fmtHMS(timeTotalSeconds);
+    }
+    return () => {
+      if (tickRef.current) {
+        clearInterval(tickRef.current);
+        tickRef.current = null;
+      }
+    };
+  }, [isRunning, myStartAt, timeTotalSeconds]);
+
+  useEffect(() => {
+    if (!isRunning) {
+      const el = document.getElementById("task-time-display");
+      if (el) el.textContent = fmtHMS(timeTotalSeconds);
+    }
+  }, [timeTotalSeconds, isRunning]);
 
   return (
     <DashboardLayout activeMenu="My Tasks">
@@ -274,7 +497,14 @@ const ViewTaskDetails = () => {
                             <TodoCheckList
                               text={item?.text ?? `Item #${index + 1}`}
                               isChecked={isTrue(item?.completed)}
-                              onChange={() => updateTodoChecklist(index)}
+                              disabled={!isRunning && !amAdmin && !amCreator}
+                              onChange={() => {
+                                if (!isRunning && !amAdmin && !amCreator) {
+                                  alert("Debes iniciar el temporizador antes de editar.");
+                                  return;
+                                }
+                                updateTodoChecklist(index);
+                              }}
                             />
                           </li>
                         ))}
@@ -286,7 +516,7 @@ const ViewTaskDetails = () => {
                     )}
                   </div>
 
-                  {/* Adjuntos */}
+                  {/* Adjuntos (strings/URLs) */}
                   {Array.isArray(task?.attachments) && task.attachments.length > 0 && (
                     <div className="mt-6">
                       <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -321,6 +551,88 @@ const ViewTaskDetails = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* ==== FILES: Archivos por tarea (binarios en backend) ==== */}
+                  <div className="mt-6">
+                    <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      Archivos
+                    </label>
+
+                    {/* Uploader */}
+                    {canManageFiles && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          onChange={handleFileSelected}
+                          className="block w-full text-sm text-slate-700 dark:text-slate-200
+                                     file:mr-2 file:py-1.5 file:px-3 file:rounded-md
+                                     file:border file:border-slate-300
+                                     file:text-sm file:font-medium
+                                     file:bg-white file:text-slate-700
+                                     hover:file:bg-slate-50
+                                     dark:file:bg-slate-800 dark:file:text-slate-200 dark:file:border-slate-700"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleUpload}
+                          disabled={!selectedFile || uploading}
+                          className="px-3 py-1.5 rounded-md text-sm font-medium border border-violet-300 text-violet-700 bg-violet-50 hover:bg-violet-100
+                                     disabled:opacity-60 disabled:cursor-not-allowed
+                                     dark:border-violet-800 dark:text-violet-300 dark:bg-violet-900/20 dark:hover:bg-violet-900/30"
+                        >
+                          {uploading ? `Subiendo… ${uploadPct}%` : "Subir"}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Listado */}
+                    <div className="mt-3">
+                      {filesLoading ? (
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Cargando archivos…</p>
+                      ) : files.length === 0 ? (
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Sin archivos.</p>
+                      ) : (
+                        <ul className="divide-y divide-slate-200 dark:divide-slate-800 border border-slate-200 dark:border-slate-700 rounded-md">
+                          {files.map((f) => (
+                            <li key={f.id} className="p-2 flex items-center justify-between">
+                              <div className="min-w-0">
+                                <p className="text-sm text-slate-800 dark:text-slate-100 truncate">
+                                  {f.originalName}
+                                </p>
+                                <p className="text-[12px] text-slate-500 dark:text-slate-400">
+                                  {f.mimeType || "—"} • {fmtBytes(f.sizeBytes)} • {new Date(f.createdAt).toLocaleString()}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownload(f.id, f.originalName)}
+                                  className="px-2 py-1 text-sm rounded border border-slate-300 hover:bg-slate-50
+                                             dark:border-slate-700 dark:hover:bg-slate-800/60"
+                                  title="Descargar"
+                                >
+                                  ⬇️
+                                </button>
+                                {canManageFiles && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(f.id)}
+                                    className="px-2 py-1 text-sm rounded border border-rose-300 text-rose-700 bg-rose-50 hover:bg-rose-100
+                                               dark:border-rose-800 dark:text-rose-300 dark:bg-rose-900/20 dark:hover:bg-rose-900/30"
+                                    title="Eliminar"
+                                  >
+                                    🗑
+                                  </button>
+                                )}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                  {/* ==== /FILES ==== */}
                 </div>
 
                 {/* Columna lateral */}
@@ -335,6 +647,8 @@ const ViewTaskDetails = () => {
                     }
                   />
                   <InfoBox label="Progreso" value={`${task?.progress ?? 0}%`} />
+
+                  {/* Assigned To */}
                   <div className="mt-4">
                     <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
                       Assigned To
@@ -346,6 +660,56 @@ const ViewTaskDetails = () => {
                         <p className="text-sm text-slate-500 dark:text-slate-400">—</p>
                       )}
                     </div>
+                  </div>
+
+                  {/* Time Tracking */}
+                  <div className="mt-6 border-t border-slate-200 dark:border-slate-700 pt-4">
+                    <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      Tiempo invertido
+                    </label>
+                    <div className="mt-2 flex items-center justify-between">
+                      <div
+                        id="task-time-display"
+                        className="text-lg font-mono text-slate-900 dark:text-slate-100"
+                        title="Tiempo total (hh:mm:ss)"
+                      >
+                        {fmtHMS(timeTotalSeconds)}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isRunning ? (
+                          <button
+                            type="button"
+                            onClick={handleStopTimer}
+                            className="px-3 py-1.5 rounded-md text-sm font-medium border border-rose-300 text-rose-700 bg-rose-50 hover:bg-rose-100
+                                       dark:border-rose-800 dark:text-rose-300 dark:bg-rose-900/20 dark:hover:bg-rose-900/30"
+                            title="Detener mi temporizador"
+                          >
+                            ⏹ Detener
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleStartTimer}
+                            className="px-3 py-1.5 rounded-md text-sm font-medium border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100
+                                       dark:border-emerald-800 dark:text-emerald-300 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30"
+                            title="Iniciar mi temporizador"
+                          >
+                            ▶️ Iniciar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {!isRunning && !amAdmin && !amCreator && (
+                      <p className="mt-2 text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1
+                                  dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800/60">
+                        Para editar esta tarea debes iniciar tu temporizador.
+                      </p>
+                    )}
+                    {isRunning && myStartAt && (
+                      <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                        Corriendo desde {new Date(myStartAt).toLocaleTimeString()}
+                      </p>
+                    )}
                   </div>
                 </div>
               </>
@@ -362,11 +726,9 @@ const ViewTaskDetails = () => {
 
     const taskId = Number(task?.id);
 
-    // copia simple del estado actual
     const prevItems = task.todoChecklist.map((it) => ({ ...it }));
     const prevDerived = deriveStatusAndProgress(prevItems);
 
-    // Toggle local y normalización del payload
     const normalized = prevItems
       .map((it, i) => {
         const idNum =
@@ -384,7 +746,6 @@ const ViewTaskDetails = () => {
 
     const nextDerived = deriveStatusAndProgress(normalized);
 
-    // Optimista: actualiza UI
     setTask((t) =>
       t
         ? {
@@ -449,13 +810,17 @@ const InfoBox = ({ label, value }) => (
   </div>
 );
 
-const TodoCheckList = ({ text, isChecked, onChange }) => (
-  <div className="flex items-center gap-3 p-2 border border-slate-200 rounded
-                  bg-white dark:bg-slate-900 dark:border-slate-700">
+const TodoCheckList = ({ text, isChecked, onChange, disabled }) => (
+  <div
+    className={`flex items-center gap-3 p-2 border border-slate-200 rounded
+                bg-white dark:bg-slate-900 dark:border-slate-700
+                ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+  >
     <input
       type="checkbox"
       checked={isChecked}
-      onChange={onChange}
+      onChange={disabled ? undefined : onChange}
+      disabled={disabled}
       className="w-4 h-4 accent-blue-600 dark:accent-blue-500"
     />
     <p
