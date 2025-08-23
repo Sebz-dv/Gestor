@@ -187,7 +187,7 @@ const TaskCard = ({
 
   return (
     <div
-      className="rounded-xl border border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80 backdrop-blur p-4 shadow-sm hover:shadow-md dark:shadow-slate-950/40 transition-colors cursor-pointer"
+      className="rounded-xl border border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80 backdrop-blur p-4 shadow-sm hover:shadow-md dark:shadow-slate-950/40  transition-colors cursor-pointer"
       onClick={onClick}
     >
       <div className="flex items-center gap-2 mb-3">

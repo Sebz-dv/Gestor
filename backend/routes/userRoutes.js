@@ -1,3 +1,4 @@
+//userRoutes.js
 const express = require("express");
 const { adminOnly, protect } = require("../middlewares/authMiddleware"); // ajusta la ruta si es distinta
 const { getUsers, getUserById } = require("../controllers/userController"); // idem

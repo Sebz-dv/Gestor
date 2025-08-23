@@ -4,6 +4,7 @@ import {
   LuClipboardCheck,
   LuSquarePlus,
   LuLogOut,
+  LuSettings
 } from "react-icons/lu";
 
 export const SIDE_MENU_ADMIN_DATA = [
@@ -15,25 +16,31 @@ export const SIDE_MENU_ADMIN_DATA = [
   },
   {
     id: "02",
-    label: "Manage Tasks",
+    label: "Administrador de Tareas",
     icon: LuClipboardCheck,
     path: "/admin/tasks",
   },
   {
     id: "03",
-    label: "Create Task",
+    label: "Crear Tareas",
     icon: LuSquarePlus,
     path: "/admin/create-tasks",
   },
   {
     id: "04",
-    label: "Team Members",
+    label: "Miembros del Equipo",
     icon: LuUsers,
     path: "/admin/users",
   },
   {
+    id: "06",
+    label: "Ajustes",
+    icon: LuSettings ,
+    path: "/admin/settings",
+  },
+  {
     id: "05",
-    label: "Logout",
+    label: "Cerrar Sesión",
     icon: LuLogOut,
     path: "logout",
   },

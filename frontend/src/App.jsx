@@ -22,6 +22,7 @@ import UserDashboard from "./pages/User/UserDashboard";
 import MyTasks from "./pages/User/MyTasks";
 import ViewTaskDetails from "./pages/User/ViewTaskDetails";
 import UserProvider, { UserContext } from "./context/UserContext";
+import Settings from "./pages/Admin/Settings";
 
 const App = () => {
   return (
@@ -40,6 +41,7 @@ const App = () => {
               <Route path="/admin/create-tasks" element={<CreateTask />} />
               <Route path="/admin/create-tasks/:id" element={<CreateTask />} />
               <Route path="/admin/users" element={<ManageUsers />} />
+              <Route path="/admin/settings" element={<Settings />} />
             </Route>
 
             {/* User (el rol correcto es "member") */}

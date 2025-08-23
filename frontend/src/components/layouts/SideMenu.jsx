@@ -316,7 +316,7 @@ const SideMenu = ({ activeMenu }) => {
           >
             {showLabels ? user?.name || "Anonymous" : ""}
           </h5>
-          <p
+          {/* <p
             className={[
               "text-xs text-slate-500 dark:text-slate-400",
               collapsed ? "hidden md:block md:opacity-0 md:h-0" : "",
@@ -324,7 +324,7 @@ const SideMenu = ({ activeMenu }) => {
             title={user?.email || ""}
           >
             {showLabels ? user?.email || "no-email@example.com" : ""}
-          </p>
+          </p> */}
           <div className="mt-2">
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>

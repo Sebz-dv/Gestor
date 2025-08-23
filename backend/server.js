@@ -11,6 +11,7 @@ const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 const reportRoutes = require("./routes/reportRoutes");
+const usersRoutes = require("./routes/usersRoutes");
 const User = require("./models/User");
 const Task = require("./models/Task");
 // server.js (arriba)
@@ -67,6 +68,7 @@ app.post("/api/upload-image", upload.single("image"), (req, res) => {
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/usersR", usersRoutes);
 app.use("/api/tasks", taskRoutes);
 
 // Sub-rutas de archivos por tarea
