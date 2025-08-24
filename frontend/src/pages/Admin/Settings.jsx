@@ -3,12 +3,13 @@ import { useSearchParams } from "react-router-dom";
 import DashboardLayout from "../../components/layouts/DashboardLayout";
 import { LuUsers, LuUser, LuShield, LuCog, LuLandmark  } from "react-icons/lu";
 import UsersManager from "./UsersManager";
+import CompanyDashboard from "../Company/CompanyDashboard";
 
 const TABS = [
   { key: "users", label: "Usuarios", icon: LuUsers },
-  { key: "enterprise", label: "Empresa", icon: LuLandmark , soon: true },
-  { key: "roles", label: "Roles", icon: LuShield, soon: true },
-  { key: "preferences", label: "Preferencias", icon: LuCog, soon: true },
+  { key: "enterprise", label: "Empresa", icon: LuLandmark },
+  // { key: "roles", label: "Roles", icon: LuShield, soon: true },
+  // { key: "preferences", label: "Preferencias", icon: LuCog, soon: true },
 ];
 
 const Settings = () => {
@@ -19,6 +20,8 @@ const Settings = () => {
     switch (current) {
       case "users":
         return <UsersManager />;
+      case "enterprise":
+        return <CompanyDashboard />;
       default:
         return (
           <div className="p-6">

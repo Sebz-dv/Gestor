@@ -25,6 +25,12 @@ export const API_PATHS = {
     DELETE_USER: (userId) => `/api/usersR/${userId}`, 
   },
 
+  COMPANY: {
+    GET_COMPANY: "/api/company",
+    UPSERT_COMPANY: "/api/company",
+    UPDATE_COMPANY_LOGO: "/api/company/logo",
+  },
+
   TASKS: {
     GET_DASHBOARD_DATA: "/api/tasks/dashboard-data",
     GET_USER_DASHBOARD_DATA: "/api/tasks/user-dashboard-data",

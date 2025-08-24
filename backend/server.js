@@ -1,7 +1,7 @@
 // server.js
+const cors = require("cors");
 require("dotenv").config();
 const express = require("express");
-const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
@@ -12,8 +12,10 @@ const userRoutes = require("./routes/userRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 const reportRoutes = require("./routes/reportRoutes");
 const usersRoutes = require("./routes/usersRoutes");
+const companyRoutes = require("./routes/companyRoutes");
 const User = require("./models/User");
 const Task = require("./models/Task");
+const companyModel = require("./models/Company");
 // server.js (arriba)
 const taskFilesRoutes = require("./routes/taskFilesRoutes");
 const TaskFile = require("./models/TaskFile");
@@ -22,7 +24,7 @@ const app = express();
 // CORS
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "*",
+    origin: process.env.CLIENT_URL || "*" || "http://localhost:5173",
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -70,6 +72,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/usersR", usersRoutes);
 app.use("/api/tasks", taskRoutes);
+app.use("/api/company", companyRoutes);
 
 // Sub-rutas de archivos por tarea
 app.use("/api/tasks/:id/files", taskFilesRoutes);
@@ -96,7 +99,8 @@ app.use((err, _req, res, _next) => {
   await Promise.all([
     User.ensureTable(db),
     Task.ensureTables(db),
-    TaskFile.ensureTable(db), // asegurar tabla task_files
+    TaskFile.ensureTable(db),
+    companyModel.ensureTables(db),
   ]);
 
   // Asegura carpeta /uploads/tasks
