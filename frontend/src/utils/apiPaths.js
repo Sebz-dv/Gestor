@@ -46,6 +46,9 @@ export const API_PATHS = {
     START_TASK_TIMER: (taskId) => `/api/tasks/${taskId}/timer/start`,
     STOP_TASK_TIMER: (taskId) => `/api/tasks/${taskId}/timer/stop`,
     GET_TASK_TIME: (taskId) => `/api/tasks/${taskId}/timer`,
+
+    // --- History ---
+    GET_TASK_HISTORY: (taskId) => `/api/tasks/${taskId}/history`,
   },
 
   // --- Archivos por tarea ---

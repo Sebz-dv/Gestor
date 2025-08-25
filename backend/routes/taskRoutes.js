@@ -17,6 +17,7 @@ const {
   startTaskTimer,
   stopTaskTimer,
   getTaskTime,
+  getTaskHistory
 } = require("../controllers/taskController");
 
 const router = express.Router();
@@ -37,7 +38,7 @@ router.put("/:id", protect, updateTask);           // Update parcial
 router.delete("/:id", protect, adminOnly, deleteTask); // Borrar (solo Admin)
 router.put("/:id/status", protect, updateTaskStatus);  // Cambiar estado
 router.put("/:id/todo", protect, updateTaskChecklist); // Actualizar checklist
-
+router.get("/:id/history", protect, getTaskHistory);
 /* =========================
  *       TIME TRACKING
  * ========================= */

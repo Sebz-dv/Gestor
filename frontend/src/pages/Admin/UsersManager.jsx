@@ -7,15 +7,23 @@ import UserFormModal from "../../components/user/UserFormModal";
 import Pagination from "../../components/user/Pagination";
 
 /* ---------- helpers ---------- */
+const mapRole = (r) => (r === "user" ? "member" : r || "member");
+const isNonEmpty = (v) => typeof v === "string" && v.trim() !== "";
+const getInitialsUrl = (seed) =>
+  `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
+    seed || "U"
+  )}`;
+
 const normalizeUser = (u = {}) => ({
   id: u.id ?? u.user_id ?? u.uid ?? u.email ?? String(Math.random()),
   name: u.name ?? u.full_name ?? u.username ?? "—",
   email: u.email ?? "—",
-  role: u.role ?? u.rol ?? "user",
+  role: mapRole(u.role ?? u.rol ?? "member"),
   status: u.status ?? (u.active === false ? "inactive" : "active"),
-  profileImageUrl: u.profileImageUrl ?? u.avatar ?? "",
+  profileImageUrl: u.profileImageUrl ?? u.avatar ?? null, // nunca ""
   createdAt: u.createdAt ?? u.created_at ?? u.created ?? null,
 });
+
 const formatDate = (d) => {
   try {
     if (!d) return "—";
@@ -66,7 +74,7 @@ const UsersManager = () => {
 
   const rolesFromData = useMemo(() => {
     const set = new Set(
-      users.map((u) => (u.role || "").trim()).filter(Boolean)
+      users.map((u) => mapRole(u.role || "")).filter(Boolean)
     );
     return Array.from(set).sort();
   }, [users]);
@@ -74,12 +82,13 @@ const UsersManager = () => {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return users.filter((u) => {
+      const role = mapRole(u.role || "");
       const matchesQ =
         !term ||
-        u.name.toLowerCase().includes(term) ||
-        u.email.toLowerCase().includes(term) ||
-        (u.role || "").toLowerCase().includes(term);
-      const matchesRole = roleFilter === "all" || (u.role || "") === roleFilter;
+        (u.name || "").toLowerCase().includes(term) ||
+        (u.email || "").toLowerCase().includes(term) ||
+        role.toLowerCase().includes(term);
+      const matchesRole = roleFilter === "all" || role === roleFilter;
       const matchesStatus =
         statusFilter === "all" || (u.status || "active") === statusFilter;
       return matchesQ && matchesRole && matchesStatus;
@@ -192,7 +201,7 @@ const UsersManager = () => {
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm bg-white dark:bg-slate-900">
               <thead className="bg-slate-50 dark:bg-slate-800/50">
-                <tr className="text-left">
+                <tr className="text-center">
                   <th className="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">
                     Usuario
                   </th>
@@ -202,13 +211,13 @@ const UsersManager = () => {
                   <th className="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">
                     Rol
                   </th>
-                  <th className="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">
+                  {/* <th className="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">
                     Estado
-                  </th>
+                  </th> */}
                   <th className="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">
                     Creado
                   </th>
-                  <th className="px-4 py-3 text-right font-semibold text-slate-600 dark:text-slate-300">
+                  <th className="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">
                     Acciones
                   </th>
                 </tr>
@@ -233,70 +242,77 @@ const UsersManager = () => {
                     </td>
                   </tr>
                 ) : (
-                  pageData.map((u) => (
-                    <tr
-                      key={u.id}
-                      className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/60 dark:hover:bg-slate-800/50"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={u.profileImageUrl || ""}
-                            alt={u.name}
-                            className="w-9 h-9 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700"
-                            onError={(e) => {
-                              e.currentTarget.src =
-                                "https://api.dicebear.com/7.x/initials/svg?seed=" +
-                                encodeURIComponent(u.name || "U");
-                            }}
-                          />
-                          <p className="font-medium text-slate-800 dark:text-slate-100 truncate">
-                            {u.name}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
-                        {u.email}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
-                        {u.role || "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={[
-                            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1",
-                            u.status === "active"
-                              ? "bg-green-50 text-green-700 ring-green-200 dark:bg-green-900/10 dark:text-green-300 dark:ring-green-800"
-                              : "bg-slate-50 text-slate-600 ring-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:ring-slate-700",
-                          ].join(" ")}
-                        >
-                          <LuCheck className="text-[14px]" />
-                          {u.status === "active" ? "Activo" : "Inactivo"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
-                        {formatDate(u.createdAt)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => openEdit(u.id)}
-                            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100"
+                  pageData.map((u) => {
+                    const seed = u.name || u.email || "U";
+                    const avatarSrc = isNonEmpty(u.profileImageUrl)
+                      ? u.profileImageUrl
+                      : getInitialsUrl(seed);
+                    return (
+                      <tr
+                        key={u.id}
+                        className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/60 dark:hover:bg-slate-800/50"
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={avatarSrc ?? undefined} // nunca ""
+                              alt={u.name || "Usuario"}
+                              className="w-9 h-9 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = getInitialsUrl(seed);
+                              }}
+                            />
+                            <p className="font-medium text-slate-800 dark:text-slate-100 truncate">
+                              {u.name}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300 text-center">
+                          {u.email}
+                        </td>
+                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300 text-center">
+                          {mapRole(u.role) || "—"}
+                        </td>
+                        {/* <td className="px-4 py-3">
+                          <span
+                            className={[
+                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1",
+                              u.status === "active"
+                                ? "bg-green-50 text-green-700 ring-green-200 dark:bg-green-900/10 dark:text-green-300 dark:ring-green-800"
+                                : "bg-slate-50 text-slate-600 ring-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:ring-slate-700",
+                            ].join(" ")}
                           >
-                            <LuPencil />
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => handleDelete(u.id)}
-                            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-900/30 text-rose-700 dark:text-rose-300"
-                          >
-                            <LuTrash2 />
-                            Eliminar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                            <LuCheck className="text-[14px]" />
+                            {u.status === "active" ? "Activo" : "Inactivo"}
+                          </span>
+                        </td> */}
+                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300 text-center">
+                          {formatDate(u.createdAt)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => openEdit(u.id)}
+                              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100"
+                            >
+                              <LuPencil />
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleDelete(u.id)}
+                              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-900/30 text-rose-700 dark:text-rose-300"
+                            >
+                              <LuTrash2 />
+                              Eliminar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

@@ -4,15 +4,24 @@ import { API_PATHS } from "../../utils/apiPaths";
 import toast from "react-hot-toast";
 import { LuUpload, LuX } from "react-icons/lu";
 
+/* ----------------- Helpers ----------------- */
+const mapRole = (r) => (r === "user" ? "member" : r || "member");
+const isNonEmpty = (v) => typeof v === "string" && v.trim() !== "";
+const getInitialsUrl = (seed) =>
+  `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
+    seed || "User"
+  )}`;
+
 const normalizeUser = (u = {}) => ({
   id: u.id ?? u.user_id ?? u.uid ?? u.email ?? String(Math.random()),
   name: u.name ?? u.full_name ?? u.username ?? "—",
   email: u.email ?? "—",
-  role: u.role ?? u.rol ?? "user",
+  role: mapRole(u.role ?? u.rol ?? "member"),
   status: u.status ?? (u.active === false ? "inactive" : "active"),
-  profileImageUrl: u.profileImageUrl ?? u.avatar ?? "",
+  profileImageUrl: u.profileImageUrl ?? u.avatar ?? null, // nunca ""
 });
 
+/* ----------------- Component ----------------- */
 const UserFormModal = ({ userId, onClose, onSaved, roles = [] }) => {
   const isEdit = Boolean(userId);
   const [loading, setLoading] = useState(isEdit);
@@ -22,9 +31,9 @@ const UserFormModal = ({ userId, onClose, onSaved, roles = [] }) => {
     name: "",
     email: "",
     password: "",
-    role: roles[0] || "user",
+    role: mapRole(roles[0]) || "member",
     status: "active",
-    profileImageUrl: "",
+    profileImageUrl: null,
   });
 
   useEffect(() => {
@@ -41,11 +50,17 @@ const UserFormModal = ({ userId, onClose, onSaved, roles = [] }) => {
           name: u.name || "",
           email: u.email || "",
           password: "",
-          role: u.role || roles[0] || "user",
+          role: mapRole(u.role) || "member",
           status: u.status || "active",
-          profileImageUrl: u.profileImageUrl || "",
+          profileImageUrl: isNonEmpty(u.profileImageUrl)
+            ? u.profileImageUrl
+            : null,
         }));
       } catch (err) {
+        console.error(
+          "[UserFormModal] GET user error:",
+          err?.response?.data || err
+        );
         toast.error(
           err?.response?.data?.message || "No pude cargar el usuario."
         );
@@ -72,14 +87,17 @@ const UserFormModal = ({ userId, onClose, onSaved, roles = [] }) => {
       const { data } = await axiosInstance.post(
         API_PATHS.IMAGE.UPLOAD_IMAGE,
         fd,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
+        { headers: { "Content-Type": "multipart/form-data" } }
       );
-      const url = data?.imageUrl || data?.url || "";
+      const url = data?.imageUrl || data?.url;
+      if (!isNonEmpty(url)) throw new Error("No recibí la URL de la imagen");
       setForm((f) => ({ ...f, profileImageUrl: url }));
       toast.success("Imagen subida ✅", { id: "upload" });
     } catch (err) {
+      console.error(
+        "[UserFormModal] upload error:",
+        err?.response?.data || err
+      );
       toast.error(err?.response?.data?.message || "No pude subir la imagen.", {
         id: "upload",
       });
@@ -88,20 +106,27 @@ const UserFormModal = ({ userId, onClose, onSaved, roles = [] }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return toast.error("El nombre es requerido.");
-    if (!form.email.trim()) return toast.error("El email es requerido.");
+    const name = form.name?.trim();
+    const email = form.email?.trim().toLowerCase();
+    const role = mapRole(form.role?.trim());
+    const profileImageUrl = isNonEmpty(form.profileImageUrl)
+      ? form.profileImageUrl
+      : undefined;
+
+    if (!name) return toast.error("El nombre es requerido.");
+    if (!email) return toast.error("El email es requerido.");
     if (!isEdit && !form.password.trim())
       return toast.error("La contraseña es requerida.");
+    if (!isEdit && String(form.password).length < 8)
+      return toast.error("La contraseña debe tener al menos 8 caracteres.");
 
     setSaving(true);
     const payload = {
-      name: form.name.trim(),
-      email: form.email.trim(),
-      role: form.role?.trim() || "user",
-      status: form.status === "inactive" ? "inactive" : "active",
-      profileImageUrl: form.profileImageUrl || undefined,
-      avatar: form.profileImageUrl || undefined,
-      ...(form.password ? { password: form.password } : {}),
+      name,
+      email,
+      role,
+      profileImageUrl,
+      ...(isEdit ? {} : { password: form.password }),
     };
 
     try {
@@ -114,6 +139,7 @@ const UserFormModal = ({ userId, onClose, onSaved, roles = [] }) => {
       }
       onSaved?.();
     } catch (err) {
+      console.error("[UserFormModal] save error:", err?.response?.data || err);
       toast.error(
         err?.response?.data?.message || "No pude guardar el usuario."
       );
@@ -121,6 +147,19 @@ const UserFormModal = ({ userId, onClose, onSaved, roles = [] }) => {
       setSaving(false);
     }
   };
+
+  // Avatar: nunca "" en src; fallback a iniciales o placeholder
+  const seed = form.name?.trim() || form.email?.trim() || "User";
+  const fallback = getInitialsUrl(seed);
+  const avatarSrc = isNonEmpty(form.profileImageUrl)
+    ? form.profileImageUrl
+    : form.name?.trim()
+    ? getInitialsUrl(form.name.trim())
+    : null;
+
+  const uiRoles = Array.from(
+    new Set(["admin", "member", ...roles.map(mapRole)])
+  );
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -147,18 +186,26 @@ const UserFormModal = ({ userId, onClose, onSaved, roles = [] }) => {
           ) : (
             <>
               <div className="flex items-center gap-3">
-                <img
-                  src={
-                    form.profileImageUrl ||
-                    (form.name
-                      ? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
-                          form.name
-                        )}`
-                      : "")
-                  }
-                  alt="avatar"
-                  className="w-14 h-14 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700"
-                />
+                {avatarSrc ? (
+                  <img
+                    src={avatarSrc ?? undefined} // nunca ""
+                    alt="avatar"
+                    width={56}
+                    height={56}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = fallback;
+                    }}
+                    className="w-14 h-14 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-full ring-1 ring-slate-200 dark:ring-slate-700 bg-slate-100 dark:bg-slate-800 grid place-items-center text-[10px] text-slate-500">
+                    Sin foto
+                  </div>
+                )}
+
                 <label className="inline-flex items-center gap-2 cursor-pointer rounded-xl border border-dashed border-slate-300 dark:border-slate-600 px-3 py-2 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
                   <LuUpload />
                   Subir avatar
@@ -222,14 +269,11 @@ const UserFormModal = ({ userId, onClose, onSaved, roles = [] }) => {
                     onChange={onChange}
                     className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    {roles.length === 0 && <option value="user">user</option>}
-                    {Array.from(new Set(["admin", "user", ...roles])).map(
-                      (r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      )
-                    )}
+                    {uiRoles.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>

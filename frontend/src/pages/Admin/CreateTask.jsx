@@ -12,20 +12,32 @@ import SelectDropdown from "../../components/input/SelectDropdown";
 import SelectUsers from "../../components/input/SelectUsers";
 import TodoListInput from "../../components/input/TodoListInput";
 import AddAttachmentsInput from "../../components/input/AddAttachmentsInput";
+import TaskHistory from "../../components/modals/TaskHistory";
+import TaskHistoryModal from "../../components/modals/TaskHistory";
 
 const FieldHint = ({ children }) => (
-  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{children}</p>
+  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+    {children}
+  </p>
 );
 
 const SectionTitle = ({ title, desc }) => (
   <div className="mb-3">
-    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</h3>
-    {desc ? <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{desc}</p> : null}
+    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+      {title}
+    </h3>
+    {desc ? (
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+        {desc}
+      </p>
+    ) : null}
   </div>
 );
 
 const Skeleton = ({ className = "" }) => (
-  <div className={`animate-pulse rounded-md bg-slate-200/70 dark:bg-slate-700/50 ${className}`} />
+  <div
+    className={`animate-pulse rounded-md bg-slate-200/70 dark:bg-slate-700/50 ${className}`}
+  />
 );
 
 // ==========================================
@@ -35,7 +47,10 @@ const parseMaybeJson = (val) => {
   if (typeof val !== "string") return val;
   try {
     const trimmed = val.trim();
-    if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+    if (
+      (trimmed.startsWith("[") && trimmed.endsWith("]")) ||
+      (trimmed.startsWith("{") && trimmed.endsWith("}"))
+    ) {
       return JSON.parse(trimmed);
     }
     if (/^\d+(,\d+)*$/.test(trimmed)) {
@@ -58,7 +73,9 @@ const normalizeUserIdsFromApi = (input) => {
     if (x == null) return null;
     if (typeof x === "number" || typeof x === "string") return Number(x);
     if (typeof x === "object") {
-      return Number(x.id ?? x.userId ?? x.value ?? x.key ?? x.uid ?? x.user_id ?? NaN);
+      return Number(
+        x.id ?? x.userId ?? x.value ?? x.key ?? x.uid ?? x.user_id ?? NaN
+      );
     }
     return null;
   });
@@ -67,7 +84,9 @@ const normalizeUserIdsFromApi = (input) => {
 const toApiUserIds = (val) => {
   const arr = ensureArray(val);
   return arr
-    .map((x) => (typeof x === "number" || typeof x === "string" ? Number(x) : null))
+    .map((x) =>
+      typeof x === "number" || typeof x === "string" ? Number(x) : null
+    )
     .filter((n) => Number.isFinite(n));
 };
 const normalizeAttachmentsFromApi = (input) => {
@@ -79,7 +98,14 @@ const normalizeAttachmentsFromApi = (input) => {
         return { name: x, url: x };
       }
       if (typeof x === "object") {
-        const name = x.name ?? x.filename ?? x.title ?? x.label ?? x.url ?? x.path ?? "archivo";
+        const name =
+          x.name ??
+          x.filename ??
+          x.title ??
+          x.label ??
+          x.url ??
+          x.path ??
+          "archivo";
         const url = x.url ?? x.path ?? null;
         return { name: String(name), url: url ? String(url) : null };
       }
@@ -110,6 +136,7 @@ const CreateTask = () => {
   const routeId = idParam ?? taskIdParam ?? null;
   const stateId = location?.state?.taskId ?? null;
   const taskId = routeId ?? stateId;
+  const [openHistory, setOpenHistory] = useState(false);
 
   const [taskData, setTaskData] = useState({
     title: "",
@@ -153,7 +180,10 @@ const CreateTask = () => {
 
   const toApiChecklist = (list = []) => {
     const n = normalizeChecklist(list);
-    return n.map(({ text, completed }) => ({ text, completed: Boolean(completed) }));
+    return n.map(({ text, completed }) => ({
+      text,
+      completed: Boolean(completed),
+    }));
   };
 
   const fetchTask = async (id) => {
@@ -169,10 +199,16 @@ const CreateTask = () => {
         title: data?.title ?? "",
         description: data?.description ?? "",
         priority: data?.priority ?? "Low",
-        dueDate: data?.dueDate ? moment(data.dueDate).format("YYYY-MM-DD") : null,
-        assignedTo: normalizeUserIdsFromApi(data?.assignedTo ?? data?.assigned_to),
+        dueDate: data?.dueDate
+          ? moment(data.dueDate).format("YYYY-MM-DD")
+          : null,
+        assignedTo: normalizeUserIdsFromApi(
+          data?.assignedTo ?? data?.assigned_to
+        ),
         attachments: normalizeAttachmentsFromApi(data?.attachments),
-        todoChecklist: normalizeChecklist(data?.todoChecklist ?? data?.todo_checklist ?? []),
+        todoChecklist: normalizeChecklist(
+          data?.todoChecklist ?? data?.todo_checklist ?? []
+        ),
       });
     } catch (err) {
       console.error(err);
@@ -192,11 +228,16 @@ const CreateTask = () => {
     setError("");
 
     if (!taskData.title?.trim()) return setError("El título es obligatorio.");
-    if (!taskData.description?.trim()) return setError("La descripción es obligatoria.");
-    if (!taskData.dueDate) return setError("La fecha de vencimiento es obligatoria.");
+    if (!taskData.description?.trim())
+      return setError("La descripción es obligatoria.");
+    if (!taskData.dueDate)
+      return setError("La fecha de vencimiento es obligatoria.");
     if (!Array.isArray(taskData.assignedTo) || taskData.assignedTo.length === 0)
       return setError("Debes asignar al menos una persona.");
-    if (!Array.isArray(taskData.todoChecklist) || taskData.todoChecklist.length === 0)
+    if (
+      !Array.isArray(taskData.todoChecklist) ||
+      taskData.todoChecklist.length === 0
+    )
       return setError("Agrega al menos un ítem al checklist.");
 
     if (taskId) {
@@ -340,11 +381,15 @@ const CreateTask = () => {
                           placeholder="Ej. Diseñar la pantalla de inicio"
                           className="form-input mt-1"
                           value={taskData.title}
-                          onChange={(e) => handleValueChange("title", e.target.value)}
+                          onChange={(e) =>
+                            handleValueChange("title", e.target.value)
+                          }
                           disabled={loading}
                           aria-label="Título de la tarea"
                         />
-                        <FieldHint>Usa un título corto, directo y fácil de reconocer.</FieldHint>
+                        <FieldHint>
+                          Usa un título corto, directo y fácil de reconocer.
+                        </FieldHint>
                       </div>
 
                       <div className="mt-3">
@@ -356,18 +401,24 @@ const CreateTask = () => {
                           className="form-input mt-1"
                           rows={4}
                           value={taskData.description}
-                          onChange={(e) => handleValueChange("description", e.target.value)}
+                          onChange={(e) =>
+                            handleValueChange("description", e.target.value)
+                          }
                           disabled={loading}
                           aria-label="Descripción de la tarea"
                         />
-                        <FieldHint>Puedes pegar listas, requisitos o links de referencia.</FieldHint>
+                        <FieldHint>
+                          Puedes pegar listas, requisitos o links de referencia.
+                        </FieldHint>
                       </div>
                     </>
                   )}
 
                   {error && (
-                    <div className="mt-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3
-                                    dark:text-rose-300 dark:bg-rose-900/30 dark:border-rose-800/50">
+                    <div
+                      className="mt-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3
+                                    dark:text-rose-300 dark:bg-rose-900/30 dark:border-rose-800/50"
+                    >
                       {error}
                     </div>
                   )}
@@ -387,11 +438,16 @@ const CreateTask = () => {
                       <SelectDropdown
                         options={PRIORITY_DATA}
                         value={taskData.priority}
-                        onChange={(value) => handleValueChange("priority", value)}
+                        onChange={(value) =>
+                          handleValueChange("priority", value)
+                        }
                         placeholder="Selecciona una prioridad"
                         disabled={loading}
                       />
-                      <FieldHint>“Alta” para urgencias operativas. “Baja” si puede esperar.</FieldHint>
+                      <FieldHint>
+                        “Alta” para urgencias operativas. “Baja” si puede
+                        esperar.
+                      </FieldHint>
                     </div>
 
                     <div className="col-span-6 md:col-span-4">
@@ -402,11 +458,15 @@ const CreateTask = () => {
                         type="date"
                         className="form-input mt-1"
                         value={taskData.dueDate || ""}
-                        onChange={({ target }) => handleValueChange("dueDate", target.value)}
+                        onChange={({ target }) =>
+                          handleValueChange("dueDate", target.value)
+                        }
                         disabled={loading}
                         aria-label="Fecha de vencimiento"
                       />
-                      <FieldHint>Elige una fecha realista para evitar atrasos.</FieldHint>
+                      <FieldHint>
+                        Elige una fecha realista para evitar atrasos.
+                      </FieldHint>
                     </div>
 
                     <div className="col-span-12">
@@ -415,7 +475,9 @@ const CreateTask = () => {
                       </label>
                       <SelectUsers
                         selectedUsers={taskData.assignedTo}
-                        setSelectedUsers={(value) => handleValueChange("assignedTo", value)}
+                        setSelectedUsers={(value) =>
+                          handleValueChange("assignedTo", value)
+                        }
                         disabled={loading}
                       />
                       <FieldHint>Puedes asignar múltiples personas.</FieldHint>
@@ -424,26 +486,38 @@ const CreateTask = () => {
                 </div>
 
                 <div className="p-5 border-b border-slate-200 dark:border-slate-800">
-                  <SectionTitle title="Checklist" desc="Desglosa la tarea en pasos accionables." />
+                  <SectionTitle
+                    title="Checklist"
+                    desc="Desglosa la tarea en pasos accionables."
+                  />
                   <TodoListInput
                     todoList={taskData?.todoChecklist}
-                    setTodoList={(value) => handleValueChange("todoChecklist", value)}
+                    setTodoList={(value) =>
+                      handleValueChange("todoChecklist", value)
+                    }
                     disabled={loading}
                   />
                 </div>
 
                 <div className="p-5">
-                  <SectionTitle title="Adjuntos" desc="Agrega archivos de soporte (imágenes, PDFs, etc.)." />
+                  <SectionTitle
+                    title="Adjuntos"
+                    desc="Agrega archivos de soporte (imágenes, PDFs, etc.)."
+                  />
                   <AddAttachmentsInput
                     attachments={taskData?.attachments}
-                    setAttachments={(value) => handleValueChange("attachments", value)}
+                    setAttachments={(value) =>
+                      handleValueChange("attachments", value)
+                    }
                     disabled={loading}
                   />
                 </div>
 
                 {/* Barra de acciones sticky dentro de la card */}
-                <div className="sticky bottom-0 border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/70
-                                dark:border-slate-800 dark:bg-slate-900/90 dark:supports-[backdrop-filter]:bg-slate-900/70 rounded-b-2xl">
+                <div
+                  className="sticky bottom-0 border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/70
+                                dark:border-slate-800 dark:bg-slate-900/90 dark:supports-[backdrop-filter]:bg-slate-900/70 rounded-b-2xl"
+                >
                   <div className="p-4 flex items-center justify-end gap-2">
                     <button
                       type="button"
@@ -459,7 +533,13 @@ const CreateTask = () => {
                       type="submit"
                       disabled={loading}
                     >
-                      {loading ? (taskId ? "Actualizando…" : "Creando…") : (taskId ? "Actualizar tarea" : "Crear tarea")}
+                      {loading
+                        ? taskId
+                          ? "Actualizando…"
+                          : "Creando…"
+                        : taskId
+                        ? "Actualizar tarea"
+                        : "Crear tarea"}
                     </button>
                   </div>
                 </div>
@@ -470,32 +550,75 @@ const CreateTask = () => {
             <div className="md:col-span-1">
               <div className="sticky top-24">
                 <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 dark:border-slate-800 dark:bg-slate-900">
-                  <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Resumen</h4>
+                  <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    Resumen
+                  </h4>
+                  {/* Historial de la tarea */}
+                  {taskId && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setOpenHistory(true)}
+                        className="mt-3 w-full text-[12px] px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700
+                 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                      >
+                        Ver historial
+                      </button>
+
+                      <TaskHistory
+                        open={openHistory}
+                        onClose={() => setOpenHistory(false)}
+                        taskId={Number(taskId)}
+                        // opcional:
+                        // resolveActorName={(id) => usersMap[id] || `Usuario #${id}`}
+                      />
+                    </>
+                  )}
                   <div className="mt-3 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-500 dark:text-slate-400">Prioridad</span>
-                      <span className="font-medium">{taskData.priority || "—"}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 dark:text-slate-400">Vence</span>
-                      <span className="font-medium">{taskData.dueDate || "—"}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 dark:text-slate-400">Asignados</span>
+                      <span className="text-slate-500 dark:text-slate-400">
+                        Prioridad
+                      </span>
                       <span className="font-medium">
-                        {Array.isArray(taskData.assignedTo) ? taskData.assignedTo.length : 0}
+                        {taskData.priority || "—"}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-500 dark:text-slate-400">Checklist</span>
+                      <span className="text-slate-500 dark:text-slate-400">
+                        Vence
+                      </span>
                       <span className="font-medium">
-                        {Array.isArray(taskData.todoChecklist) ? taskData.todoChecklist.length : 0}
+                        {taskData.dueDate || "—"}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-500 dark:text-slate-400">Adjuntos</span>
+                      <span className="text-slate-500 dark:text-slate-400">
+                        Asignados
+                      </span>
                       <span className="font-medium">
-                        {Array.isArray(taskData.attachments) ? taskData.attachments.length : 0}
+                        {Array.isArray(taskData.assignedTo)
+                          ? taskData.assignedTo.length
+                          : 0}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 dark:text-slate-400">
+                        Checklist
+                      </span>
+                      <span className="font-medium">
+                        {Array.isArray(taskData.todoChecklist)
+                          ? taskData.todoChecklist.length
+                          : 0}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 dark:text-slate-400">
+                        Adjuntos
+                      </span>
+                      <span className="font-medium">
+                        {Array.isArray(taskData.attachments)
+                          ? taskData.attachments.length
+                          : 0}
                       </span>
                     </div>
                   </div>
@@ -515,11 +638,18 @@ const CreateTask = () => {
             aria-describedby="delete-desc"
           >
             <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-sm shadow-2xl border border-slate-200 dark:border-slate-800">
-              <h4 id="delete-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              <h4
+                id="delete-title"
+                className="text-base font-semibold text-slate-900 dark:text-slate-100"
+              >
                 Eliminar tarea
               </h4>
-              <p id="delete-desc" className="text-sm text-slate-600 dark:text-slate-300 mt-2">
-                ¿Seguro que deseas eliminar esta tarea? Esta acción no se puede deshacer.
+              <p
+                id="delete-desc"
+                className="text-sm text-slate-600 dark:text-slate-300 mt-2"
+              >
+                ¿Seguro que deseas eliminar esta tarea? Esta acción no se puede
+                deshacer.
               </p>
               <div className="mt-4 flex justify-end gap-2">
                 <button

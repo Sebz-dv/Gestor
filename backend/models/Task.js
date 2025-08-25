@@ -15,6 +15,14 @@ const parseJSON = (val, fallback = []) => {
   }
 };
 
+const safeParse = (v, fb = null) => {
+  try {
+    return typeof v === "string" ? JSON.parse(v) : v ?? fb;
+  } catch {
+    return fb;
+  }
+};
+
 const toJsonIds = (input) => {
   const arr = Array.isArray(input) ? input : input == null ? [] : [input];
   const ids = arr
@@ -44,8 +52,128 @@ const toJsonAny = (val) => {
   return JSON.stringify(val);
 };
 
+/* =========================
+ *   HISTORIAL / AUDITORÍA
+ * ========================= */
+
+async function ensureHistoryTable(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS task_history (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      task_id BIGINT UNSIGNED NOT NULL,
+      actor_id BIGINT UNSIGNED NULL,
+      action VARCHAR(40) NOT NULL,           -- created | updated | deleted | todo_added | todo_updated | todo_deleted | timer_started | timer_stopped
+      entity VARCHAR(40) NOT NULL DEFAULT 'task',  -- task | todo | time_log
+      entity_id BIGINT UNSIGNED NULL,
+      old JSON NULL,
+      new JSON NULL,
+      diff JSON NULL,                        -- { field: { from, to }, ... }
+      meta JSON NULL,                        -- libre (ej: segundos, texto del todo, etc.)
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_task_created (task_id, created_at),
+      CONSTRAINT fk_hist_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+}
+
+// snapshot "core" de la tarea (sin todos ni time tracking, para diffs livianos)
+async function getTaskCoreById(pool, id) {
+  const [[row]] = await pool.query(
+    `SELECT id, title, description, priority, status,
+            due_date AS dueDate, assigned_to AS assignedTo,
+            attachments, progress
+     FROM tasks WHERE id=?`,
+    [id]
+  );
+  if (!row) return null;
+  row.assignedTo = parseJSON(row.assignedTo, []);
+  row.attachments = parseJSON(row.attachments, []);
+  return row;
+}
+
+function diffObjects(oldObj = {}, newObj = {}) {
+  const keys = new Set([
+    ...Object.keys(oldObj || {}),
+    ...Object.keys(newObj || {}),
+  ]);
+  const changed = {};
+  for (const k of keys) {
+    const a =
+      k === "assignedTo" || k === "attachments"
+        ? JSON.stringify(oldObj?.[k] ?? null)
+        : normalizeVal(oldObj?.[k]);
+    const b =
+      k === "assignedTo" || k === "attachments"
+        ? JSON.stringify(newObj?.[k] ?? null)
+        : normalizeVal(newObj?.[k]);
+    if (a !== b) {
+      changed[k] = { from: oldObj?.[k] ?? null, to: newObj?.[k] ?? null };
+    }
+  }
+  return changed;
+}
+const normalizeVal = (v) => (v instanceof Date ? v.toISOString() : v);
+
+// inserta una fila en task_history
+async function logHistory(
+  pool,
+  {
+    taskId,
+    actorId = null,
+    action,
+    entity = "task",
+    entityId = null,
+    oldData = null,
+    newData = null,
+    diff = null,
+    meta = null,
+  }
+) {
+  await pool.execute(
+    `INSERT INTO task_history (task_id, actor_id, action, entity, entity_id, old, new, diff, meta)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      taskId,
+      actorId,
+      action,
+      entity,
+      entityId,
+      oldData ? JSON.stringify(oldData) : null,
+      newData ? JSON.stringify(newData) : null,
+      diff ? JSON.stringify(diff) : null,
+      meta ? JSON.stringify(meta) : null,
+    ]
+  );
+}
+
+// listar historial
+async function listHistory(pool, taskId, { limit = 50, offset = 0 } = {}) {
+  const [rows] = await pool.query(
+    `SELECT
+        id, task_id AS taskId, actor_id AS actorId, action, entity, entity_id AS entityId,
+        old, new, diff, meta, created_at AS createdAt
+     FROM task_history
+     WHERE task_id = ?
+     ORDER BY id DESC
+     LIMIT ? OFFSET ?`,
+    [taskId, Number(limit), Number(offset)]
+  );
+
+  return rows.map((r) => ({
+    ...r,
+    old: safeParse(r.old, null),
+    new: safeParse(r.new, null),
+    diff: safeParse(r.diff, null),
+    meta: safeParse(r.meta, null),
+  }));
+}
+
+/* =========================
+ *   TABLAS PRINCIPALES
+ * ========================= */
+
 async function ensureTables(pool) {
-  // Crea tablas si no existen (assigned_to ya en JSON para nuevas instalaciones)
+  // tasks
   await pool.query(`
     CREATE TABLE IF NOT EXISTS tasks (
       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -65,6 +193,7 @@ async function ensureTables(pool) {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
+  // todos
   await pool.query(`
     CREATE TABLE IF NOT EXISTS task_todos (
       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -79,7 +208,7 @@ async function ensureTables(pool) {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
-  // --- time tracking ---
+  // time tracking
   await pool.query(`
     CREATE TABLE IF NOT EXISTS task_time_logs (
       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -95,17 +224,13 @@ async function ensureTables(pool) {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
-  // --- Migración suave desde esquemas viejos (BIGINT -> JSON) ---
-  // 1) Retira índice viejo si existiera
+  // migración suave assigned_to
   try {
     await pool.query(`ALTER TABLE tasks DROP INDEX idx_assigned_to`);
   } catch (_) {}
-
-  // 2) Intenta convertir a JSON directamente
   try {
     await pool.query(`ALTER TABLE tasks MODIFY COLUMN assigned_to JSON NULL`);
   } catch (e1) {
-    // 3) Fallback: TEXT -> normaliza -> vuelve a JSON
     try {
       await pool.query(`ALTER TABLE tasks MODIFY COLUMN assigned_to TEXT NULL`);
       await pool.query(
@@ -123,9 +248,15 @@ async function ensureTables(pool) {
       console.warn("assigned_to migration skipped:", e2.code || e2.message);
     }
   }
+
+  // historial
+  await ensureHistoryTable(pool);
 }
 
-/** Crea una tarea (y sus todos opcionales) */
+/* =========================
+ *      CRUD TAREAS
+ * ========================= */
+
 async function create(
   pool,
   {
@@ -150,9 +281,9 @@ async function create(
       priority,
       status,
       new Date(dueDate),
-      toJsonIds(assignedTo), // JSON
+      toJsonIds(assignedTo),
       createdBy,
-      toJsonAny(attachments), // JSON string o array
+      toJsonAny(attachments),
       progress,
     ]
   );
@@ -170,10 +301,25 @@ async function create(
       [values]
     );
   }
+
+  // historial: created (snapshot core)
+  const afterCore = await getTaskCoreById(pool, taskId);
+  await logHistory(pool, {
+    taskId,
+    actorId: createdBy ?? null,
+    action: "created",
+    entity: "task",
+    entityId: taskId,
+    oldData: null,
+    newData: afterCore,
+    diff: diffObjects({}, afterCore),
+    meta: null,
+  });
+
   return findById(pool, taskId);
 }
 
-/** Obtiene una tarea + sus todos */
+/** Obtiene una tarea + sus todos + resumen tiempos */
 async function findById(pool, id) {
   const [[task]] = await pool.query(
     `SELECT ${TASK_FIELDS} FROM tasks WHERE id = ?`,
@@ -248,7 +394,10 @@ async function list(
 }
 
 /** Actualiza campos de la tarea (parcial) */
-async function updateById(pool, id, patch) {
+async function updateById(pool, id, patch, actorId = null) {
+  // snapshot previo (core)
+  const before = await getTaskCoreById(pool, id);
+
   const fields = [];
   const values = [];
   const map = {
@@ -268,56 +417,180 @@ async function updateById(pool, id, patch) {
       if (k === "dueDate") {
         values.push(new Date(patch[k]));
       } else if (k === "assignedTo") {
-        values.push(toJsonIds(patch[k])); // siempre JSON
+        values.push(toJsonIds(patch[k]));
       } else if (k === "attachments") {
-        values.push(toJsonAny(patch[k])); // JSON/array/string
+        values.push(toJsonAny(patch[k]));
       } else {
         values.push(patch[k]);
       }
     }
   }
 
-  if (!fields.length) return findById(pool, id);
+  if (fields.length) {
+    values.push(id);
+    await pool.execute(
+      `UPDATE tasks SET ${fields.join(", ")} WHERE id = ?`,
+      values
+    );
+  }
 
-  values.push(id);
-  await pool.execute(
-    `UPDATE tasks SET ${fields.join(", ")} WHERE id = ?`,
-    values
-  );
+  const after = await getTaskCoreById(pool, id);
+  if (before && after) {
+    const diff = diffObjects(before, after);
+    if (Object.keys(diff).length) {
+      await logHistory(pool, {
+        taskId: id,
+        actorId,
+        action: "updated",
+        entity: "task",
+        entityId: id,
+        oldData: before,
+        newData: after,
+        diff,
+        meta: null,
+      });
+    }
+  }
+
   return findById(pool, id);
 }
 
 /** Borra tarea (cascada elimina todos) */
-async function deleteById(pool, id) {
+async function deleteById(pool, id, actorId = null) {
+  const before = await getTaskCoreById(pool, id);
   const [res] = await pool.execute(`DELETE FROM tasks WHERE id = ?`, [id]);
+
+  if (res.affectedRows === 1) {
+    await logHistory(pool, {
+      taskId: id,
+      actorId,
+      action: "deleted",
+      entity: "task",
+      entityId: id,
+      oldData: before,
+      newData: null,
+      diff: before ? diffObjects(before, {}) : null,
+      meta: null,
+    });
+  }
   return res.affectedRows === 1;
 }
 
-/** --- Todos (checklist) --- */
-async function addTodo(poolOrConn, taskId, { text, completed = false, sortOrder = 0 }) {
+/* =========================
+ *        TODOS
+ * ========================= */
+
+async function addTodo(
+  poolOrConn,
+  taskId,
+  { text, completed = false, sortOrder = 0 },
+  actorId = null
+) {
   const [res] = await poolOrConn.execute(
     `INSERT INTO task_todos (task_id, text, completed, sort_order) VALUES (?, ?, ?, ?)`,
     [taskId, text, !!completed, sortOrder]
   );
-  return res.insertId;
+  const todoId = res.insertId;
+
+  await logHistory(poolOrConn, {
+    taskId,
+    actorId,
+    action: "todo_added",
+    entity: "todo",
+    entityId: todoId,
+    oldData: null,
+    newData: { id: todoId, text, completed: !!completed, sortOrder },
+    diff: {
+      text: { from: null, to: text },
+      completed: { from: null, to: !!completed },
+      sortOrder: { from: null, to: sortOrder },
+    },
+    meta: null,
+  });
+
+  return todoId;
 }
 
-async function updateTodo(poolOrConn, todoId, { text, completed, sortOrder }) {
-  const fields = [], vals = [];
-  if (text !== undefined) { fields.push("text = ?"); vals.push(text); }
-  if (completed !== undefined) { fields.push("completed = ?"); vals.push(!!completed); }
-  if (sortOrder !== undefined) { fields.push("sort_order = ?"); vals.push(sortOrder); }
+async function updateTodo(
+  poolOrConn,
+  todoId,
+  { text, completed, sortOrder },
+  actorId = null
+) {
+  const [[before]] = await poolOrConn.query(
+    `SELECT id, task_id AS taskId, text, completed, sort_order AS sortOrder FROM task_todos WHERE id=?`,
+    [todoId]
+  );
+  if (!before) return false;
+
+  const fields = [],
+    vals = [];
+  if (text !== undefined) {
+    fields.push("text = ?");
+    vals.push(text);
+  }
+  if (completed !== undefined) {
+    fields.push("completed = ?");
+    vals.push(!!completed);
+  }
+  if (sortOrder !== undefined) {
+    fields.push("sort_order = ?");
+    vals.push(sortOrder);
+  }
   if (!fields.length) return false;
+
   vals.push(todoId);
   const [res] = await poolOrConn.execute(
     `UPDATE task_todos SET ${fields.join(", ")} WHERE id = ?`,
     vals
   );
+
+  if (res.affectedRows === 1) {
+    const [[after]] = await poolOrConn.query(
+      `SELECT id, task_id AS taskId, text, completed, sort_order AS sortOrder FROM task_todos WHERE id=?`,
+      [todoId]
+    );
+    const diff = diffObjects(before, after);
+    await logHistory(poolOrConn, {
+      taskId: after.taskId,
+      actorId,
+      action: "todo_updated",
+      entity: "todo",
+      entityId: todoId,
+      oldData: before,
+      newData: after,
+      diff,
+      meta: null,
+    });
+  }
   return res.affectedRows === 1;
 }
 
-async function deleteTodo(poolOrConn, todoId) {
-  const [res] = await poolOrConn.execute(`DELETE FROM task_todos WHERE id = ?`, [todoId]);
+async function deleteTodo(poolOrConn, todoId, actorId = null) {
+  const [[before]] = await poolOrConn.query(
+    `SELECT id, task_id AS taskId, text, completed, sort_order AS sortOrder FROM task_todos WHERE id=?`,
+    [todoId]
+  );
+  if (!before) return false;
+
+  const [res] = await poolOrConn.execute(
+    `DELETE FROM task_todos WHERE id = ?`,
+    [todoId]
+  );
+
+  if (res.affectedRows === 1) {
+    await logHistory(poolOrConn, {
+      taskId: before.taskId,
+      actorId,
+      action: "todo_deleted",
+      entity: "todo",
+      entityId: todoId,
+      oldData: before,
+      newData: null,
+      diff: diffObjects(before, {}),
+      meta: null,
+    });
+  }
   return res.affectedRows === 1;
 }
 
@@ -326,21 +599,39 @@ async function deleteTodo(poolOrConn, todoId) {
  * ========================= */
 
 // Inicia timer. Regla por defecto: 1 timer activo por usuario (en cualquier tarea).
-async function startTaskTimer(pool, taskId, userId) {
+async function startTaskTimer(pool, taskId, userId, actorId = null) {
   const [[open]] = await pool.query(
     `SELECT id FROM task_time_logs WHERE user_id=? AND end_at IS NULL LIMIT 1`,
     [userId]
   );
   if (open) throw new Error("Ya tienes un temporizador activo.");
 
-  await pool.execute(
+  const [res] = await pool.execute(
     `INSERT INTO task_time_logs (task_id, user_id, start_at) VALUES (?, ?, NOW())`,
     [taskId, userId]
   );
+
+  await logHistory(pool, {
+    taskId,
+    actorId: actorId ?? userId,
+    action: "timer_started",
+    entity: "time_log",
+    entityId: res.insertId,
+    oldData: null,
+    newData: {
+      id: res.insertId,
+      taskId,
+      userId,
+      startAt: new Date().toISOString(),
+    },
+    diff: { timer: { from: null, to: "started" } },
+    meta: { userId },
+  });
+
   return true;
 }
 
-async function stopTaskTimer(pool, taskId, userId) {
+async function stopTaskTimer(pool, taskId, userId, actorId = null) {
   const [[row]] = await pool.query(
     `SELECT id, start_at FROM task_time_logs
      WHERE user_id=? AND task_id=? AND end_at IS NULL
@@ -349,17 +640,30 @@ async function stopTaskTimer(pool, taskId, userId) {
   );
   if (!row) throw new Error("No hay temporizador activo para detener.");
 
-  await pool.execute(
-    `UPDATE task_time_logs SET end_at = NOW() WHERE id = ?`,
-    [row.id]
-  );
+  await pool.execute(`UPDATE task_time_logs SET end_at = NOW() WHERE id = ?`, [
+    row.id,
+  ]);
 
   const [[dur]] = await pool.query(
     `SELECT TIMESTAMPDIFF(SECOND, start_at, end_at) AS seconds
      FROM task_time_logs WHERE id=?`,
     [row.id]
   );
-  return Number(dur?.seconds || 0);
+  const seconds = Number(dur?.seconds || 0);
+
+  await logHistory(pool, {
+    taskId,
+    actorId: actorId ?? userId,
+    action: "timer_stopped",
+    entity: "time_log",
+    entityId: row.id,
+    oldData: { id: row.id, taskId, userId, startAt: row.start_at },
+    newData: { id: row.id, taskId, userId, endAt: new Date().toISOString() },
+    diff: { timer: { from: "started", to: "stopped" } },
+    meta: { userId, seconds },
+  });
+
+  return seconds;
 }
 
 async function getTaskTimeSummary(pool, taskId) {
@@ -390,4 +694,6 @@ module.exports = {
   startTaskTimer,
   stopTaskTimer,
   getTaskTimeSummary,
+  // history
+  listHistory,
 };

@@ -239,8 +239,8 @@ const getTaskById = async (req, res, next) => {
     if (!task) return res.status(404).json({ message: "Task no encontrada" });
 
     const admin = isAdmin(req);
-    theAssignee = isAssignee(task, Number(req.user.id));
-    const assignee = theAssignee; // para consistencia
+    const theAssignee = isAssignee(task, Number(req.user.id)); // 👈 fix: declarada
+    const assignee = theAssignee;
     const creator = Number(task.createdBy) === Number(req.user.id);
 
     if (!admin && !assignee && !creator) {
@@ -297,8 +297,8 @@ const createTask = async (req, res, next) => {
       priority,
       status,
       dueDate: toDate(dueDate),
-      assignedTo: assignees, // 👈 pasa array al model
-      createdBy: req.user?.id || null,
+      assignedTo: assignees, // 👈 array
+      createdBy: req.user?.id || null, // el modelo lo usa para log 'created'
       attachments: attachments ?? null,
       progress: 0,
       todoChecklist: Array.isArray(todoChecklist) ? todoChecklist : [],
@@ -310,7 +310,7 @@ const createTask = async (req, res, next) => {
   }
 };
 
-// Actualizar tarea
+// Actualizar tarea (con historial)
 const updateTask = async (req, res, next) => {
   try {
     const pool = req.app.locals.db;
@@ -381,14 +381,14 @@ const updateTask = async (req, res, next) => {
       }
     }
 
-    const updated = await Task.updateById(pool, id, patch);
+    const updated = await Task.updateById(pool, id, patch, Number(req.user.id)); // 👈 actorId
     res.json(updated);
   } catch (err) {
     next(err);
   }
 };
 
-// Borrar tarea (Admin)
+// Borrar tarea (Admin) con historial
 const deleteTask = async (req, res, next) => {
   try {
     const pool = req.app.locals.db;
@@ -396,7 +396,7 @@ const deleteTask = async (req, res, next) => {
     if (!Number.isFinite(id))
       return res.status(400).json({ message: "ID inválido" });
 
-    const ok = await Task.deleteById(pool, id);
+    const ok = await Task.deleteById(pool, id, Number(req.user.id)); // 👈 actorId
     if (!ok) return res.status(404).json({ message: "Task no encontrada" });
 
     res.json({ message: "Task eliminada" });
@@ -438,7 +438,7 @@ const updateTaskStatus = async (req, res, next) => {
       patch.progress = p;
     }
 
-    const updated = await Task.updateById(pool, id, patch);
+    const updated = await Task.updateById(pool, id, patch, Number(req.user.id)); // 👈 actorId
     res.json(updated);
   } catch (err) {
     next(err);
@@ -466,6 +466,7 @@ const updateTaskChecklist = async (req, res, next) => {
   try {
     const pool = req.app.locals.db;
     const id = Number(req.params.id);
+    const uid = Number(req.user.id);
     const itemsRaw = req.body?.items;
 
     if (!Number.isFinite(id))
@@ -477,7 +478,7 @@ const updateTaskChecklist = async (req, res, next) => {
     if (!task) return res.status(404).json({ message: "Task no encontrada" });
 
     const admin = isAdmin(req);
-    const assignee = isAssignee(task, Number(req.user.id));
+    const assignee = isAssignee(task, uid);
     if (!admin && !assignee) {
       return res.status(403).json({ message: "No autorizado" });
     }
@@ -524,34 +525,36 @@ const updateTaskChecklist = async (req, res, next) => {
 
     // DELETE los que ya no vienen
     for (const delId of toDelete) {
-      await Task.deleteTodo(conn, Number(delId));
+      await Task.deleteTodo(conn, Number(delId), uid); // 👈 actorId
     }
 
     // UPDATE los que traen id válido
     for (const u of toUpdate) {
-      await Task.updateTodo(conn, Number(u.id), {
-        text: u.text,
-        completed: u.completed,
-        sortOrder: u.sortOrder,
-      });
+      await Task.updateTodo(
+        conn,
+        Number(u.id),
+        { text: u.text, completed: u.completed, sortOrder: u.sortOrder },
+        uid // 👈 actorId
+      );
     }
 
     // INSERT nuevos
     for (const ins of toInsert) {
-      await Task.addTodo(conn, id, {
-        text: ins.text,
-        completed: ins.completed,
-        sortOrder: ins.sortOrder,
-      });
+      await Task.addTodo(
+        conn,
+        id,
+        { text: ins.text, completed: ins.completed, sortOrder: ins.sortOrder },
+        uid // 👈 actorId
+      );
     }
 
-    // Relee, deriva y persiste status/progress
+    // Relee, deriva y persiste status/progress (con historial)
     const after = await Task.findById(conn, id);
     const todos = Array.isArray(after?.todoChecklist)
       ? after.todoChecklist
       : [];
     const { status, progress } = deriveStatusProgress(todos);
-    await Task.updateById(conn, id, { status, progress });
+    await Task.updateById(conn, id, { status, progress }, uid); // 👈 actorId
 
     await conn.commit();
 
@@ -584,6 +587,7 @@ const startTaskTimer = async (req, res, next) => {
   try {
     const pool = req.app.locals.db;
     const taskId = Number(req.params.id);
+    const uid = Number(req.user.id);
     if (!Number.isFinite(taskId))
       return res.status(400).json({ message: "ID inválido" });
 
@@ -591,12 +595,12 @@ const startTaskTimer = async (req, res, next) => {
     if (!task) return res.status(404).json({ message: "Task no encontrada" });
 
     const admin = isAdmin(req);
-    const assignee = isAssignee(task, Number(req.user.id));
-    const creator = Number(task.createdBy) === Number(req.user.id);
+    const assignee = isAssignee(task, uid);
+    const creator = Number(task.createdBy) === uid;
     if (!admin && !assignee && !creator)
       return res.status(403).json({ message: "No autorizado" });
 
-    await Task.startTaskTimer(pool, taskId, Number(req.user.id));
+    await Task.startTaskTimer(pool, taskId, uid, uid); // 👈 actorId = user
     const summary = await Task.getTaskTimeSummary(pool, taskId);
     res.json({ message: "Timer iniciado", ...summary });
   } catch (err) {
@@ -612,6 +616,7 @@ const stopTaskTimer = async (req, res, next) => {
   try {
     const pool = req.app.locals.db;
     const taskId = Number(req.params.id);
+    const uid = Number(req.user.id);
     if (!Number.isFinite(taskId))
       return res.status(400).json({ message: "ID inválido" });
 
@@ -619,12 +624,12 @@ const stopTaskTimer = async (req, res, next) => {
     if (!task) return res.status(404).json({ message: "Task no encontrada" });
 
     const admin = isAdmin(req);
-    const assignee = isAssignee(task, Number(req.user.id));
-    const creator = Number(task.createdBy) === Number(req.user.id);
+    const assignee = isAssignee(task, uid);
+    const creator = Number(task.createdBy) === uid;
     if (!admin && !assignee && !creator)
       return res.status(403).json({ message: "No autorizado" });
 
-    const secs = await Task.stopTaskTimer(pool, taskId, Number(req.user.id));
+    const secs = await Task.stopTaskTimer(pool, taskId, uid, uid); // 👈 actorId = user
     const summary = await Task.getTaskTimeSummary(pool, taskId);
     res.json({ message: "Timer detenido", lastSpanSeconds: secs, ...summary });
   } catch (err) {
@@ -659,6 +664,36 @@ const getTaskTime = async (req, res, next) => {
   }
 };
 
+/* =================
+ *     HISTORY
+ * ================= */
+
+const getTaskHistory = async (req, res, next) => {
+  try {
+    const pool = req.app.locals.db;
+    const id = Number(req.params.id);
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit || 50)));
+    const offset = Math.max(0, Number(req.query.offset || 0));
+
+    if (!Number.isFinite(id))
+      return res.status(400).json({ message: "ID inválido" });
+
+    const task = await Task.findById(pool, id);
+    if (!task) return res.status(404).json({ message: "Task no encontrada" });
+
+    const admin = isAdmin(req);
+    const assignee = isAssignee(task, Number(req.user.id));
+    const creator = Number(task.createdBy) === Number(req.user.id);
+    if (!admin && !assignee && !creator)
+      return res.status(403).json({ message: "No autorizado" });
+
+    const history = await Task.listHistory(pool, id, { limit, offset });
+    res.json({ history, total: history.length });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getDashboardData,
   getUserDashboardData,
@@ -673,4 +708,6 @@ module.exports = {
   startTaskTimer,
   stopTaskTimer,
   getTaskTime,
+  // history
+  getTaskHistory,
 };
