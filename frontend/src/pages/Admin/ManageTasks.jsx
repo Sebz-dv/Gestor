@@ -288,7 +288,7 @@ const ManageTasks = () => {
   );
 
   return (
-    <DashboardLayout activeMenu="Tareas">
+    <DashboardLayout activeMenu="Administrador de Tareas">
       <div className="my-5">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">

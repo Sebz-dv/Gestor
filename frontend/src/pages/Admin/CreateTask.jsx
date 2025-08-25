@@ -328,7 +328,7 @@ const CreateTask = () => {
   };
 
   return (
-    <DashboardLayout activeMenu={taskId ? "Actualizar Tarea" : "Crear Tarea"}>
+    <DashboardLayout activeMenu={"Crear Tareas"}>
       <div className="mt-5">
         {/* Header de página */}
         <div className="mb-4 flex items-center justify-between">

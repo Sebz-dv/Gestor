@@ -55,13 +55,13 @@ export const SIDE_MENU_USER_DATA = [
   },
   {
     id: "02",
-    label: "My Tasks",
+    label: "Mis Tareas",
     icon: LuClipboardCheck,
     path: "/user/tasks",
   },
   {
     id: "03",
-    label: "Logout",
+    label: "Cerrar Sesión",
     icon: LuLogOut,
     path: "logout",
   },

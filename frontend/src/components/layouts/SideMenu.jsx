@@ -1,3 +1,4 @@
+// src/components/layouts/SideMenu.jsx
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { UserContext } from "../../context/UserContext";
@@ -133,8 +134,6 @@ const SideMenu = ({ activeMenu }) => {
     setMobileOpen(false); // cerrar drawer en móvil tras navegar
   };
 
-  const imageSrc = user?.profileImageUrl || null;
-
   // Clases condicionadas
   const desktopWidth = collapsed ? "md:w-20" : "md:w-64";
   const showLabels = !collapsed;
@@ -153,16 +152,6 @@ const SideMenu = ({ activeMenu }) => {
           },
         ];
   }, [items]);
-
-  // Variants para animaciones suaves
-  const itemVariants = {
-    initial: { x: 0, opacity: 1 },
-    hover: {
-      x: 3,
-      transition: { type: "spring", stiffness: 400, damping: 30 },
-    },
-    tap: { scale: 0.985 },
-  };
 
   return (
     <>
@@ -213,27 +202,25 @@ const SideMenu = ({ activeMenu }) => {
           "dark:bg-[#0b1220]/90 dark:border-white/10 dark:shadow-black/30",
           // Posición/altura
           "fixed md:sticky top-[61px] md:top-[61px] h-[calc(100vh-61px)]",
+          // 👉 Móvil: anclado a la DERECHA. Desktop: vuelve a la izquierda.
+          "right-0 left-auto md:right-auto md:left-0",
           // Ancho
           "w-72 md:w-auto",
           desktopWidth,
           // Transiciones
           "transition-[width,transform] duration-200 ease-out will-change-transform",
-          // Drawer móvil (slide via CSS)
-          mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+          // 👉 Drawer móvil: abierto = translate-x-0; cerrado = translate-x-full (se esconde a la derecha)
+          mobileOpen ? "translate-x-0" : "translate-x-full md:translate-x-0",
         ].join(" ")}
         role="navigation"
         aria-label="Barra lateral"
       >
-        {/* Header del sidebar (desktop): marca + acciones */}
-        <div className="hidden md:flex items-center justify-between px-3 py-2 border-b border-slate-200 dark:border-white/10">
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
-            className="text-sm font-semibold text-slate-800 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-r dark:from-indigo-300 dark:to-cyan-300"
-          >
-            {collapsed ? "DM" : "DoMore"}
-          </motion.div>
+        {/* Header del sidebar (desktop): centrar cuando está colapsado */}
+        <div
+          className={`hidden md:flex items-center px-3 py-2 border-b border-slate-200 dark:border-white/10 ${
+            collapsed ? "justify-center" : "justify-between"
+          }`}
+        >
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setCollapsed((v) => !v)}
@@ -272,9 +259,9 @@ const SideMenu = ({ activeMenu }) => {
             transition={{ type: "spring", stiffness: 350, damping: 20 }}
             className="w-16 h-16 rounded-full overflow-hidden mb-2 bg-slate-200 dark:bg-white/10 flex items-center justify-center ring-2 ring-white/60 dark:ring-white/10"
           >
-            {imageSrc ? (
+            {user?.profileImageUrl ? (
               <img
-                src={imageSrc}
+                src={user.profileImageUrl}
                 alt="Profile"
                 className="w-full h-full object-cover"
                 onError={(e) => {
@@ -295,7 +282,7 @@ const SideMenu = ({ activeMenu }) => {
             )}
           </motion.div>
 
-          {/* Oculta textos en colapsado (solo desktop) */}
+          {/* Badges y textos (ocultos en colapsado) */}
           {user?.role === "admin" && (
             <div
               className={[
@@ -316,15 +303,7 @@ const SideMenu = ({ activeMenu }) => {
           >
             {showLabels ? user?.name || "Anonymous" : ""}
           </h5>
-          {/* <p
-            className={[
-              "text-xs text-slate-500 dark:text-slate-400",
-              collapsed ? "hidden md:block md:opacity-0 md:h-0" : "",
-            ].join(" ")}
-            title={user?.email || ""}
-          >
-            {showLabels ? user?.email || "no-email@example.com" : ""}
-          </p> */}
+
           <div className="mt-2">
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
@@ -334,20 +313,52 @@ const SideMenu = ({ activeMenu }) => {
         <nav className="mt-3 px-2">
           {menuWithLogout.map((item) => {
             const isActive = activeMenu === item.label;
+
             const commonBtn =
-              "group relative w-full flex items-center gap-4 text-[15px] py-3 px-3.5 mb-1 rounded-xl text-left border focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40 dark:focus-visible:ring-indigo-500/40 transition-colors";
-            const activeClasses =
-              "text-indigo-600 dark:text-indigo-300 bg-gradient-to-r from-indigo-50/70 to-blue-50/40 dark:from-white/[0.06] dark:to-white/[0.02] border-indigo-200 dark:border-white/10 shadow-sm shadow-indigo-500/5 before:content-[''] before:absolute before:left-1 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-full before:bg-indigo-500/80";
-            const inactiveClasses =
+              "group relative w-full flex items-center text-[15px] py-3 rounded-xl text-left border focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40 dark:focus-visible:ring-indigo-500/40 transition-colors";
+
+            // Layout según estado
+            const expandedLayout = "justify-start gap-4 px-3.5";
+            const collapsedLayout = "justify-center gap-0 px-0 text-center";
+
+            // Activo base
+            const activeBase =
+              "text-indigo-600 dark:text-indigo-300 bg-gradient-to-r from-indigo-50/70 to-blue-50/40 dark:from-white/[0.06] dark:to-white/[0.02] border-indigo-200 dark:border-white/10 shadow-sm shadow-indigo-500/5";
+            // Barrita activa SOLO si no está colapsado
+            const activeBefore = collapsed
+              ? ""
+              : " before:content-[''] before:absolute before:left-1.5 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-full before:bg-indigo-500/80";
+
+            const inactive =
               "text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/[0.06] border-transparent";
+
+            const btnClass = [
+              commonBtn,
+              collapsed ? collapsedLayout : expandedLayout,
+              isActive ? `${activeBase}${activeBefore}` : inactive,
+            ].join(" ");
+
+            // Animación: sin desliz horizontal en colapsado (para mantener centrado)
+            const itemVariants = collapsed
+              ? {
+                  initial: { x: 0, opacity: 1 },
+                  hover: { x: 0 },
+                  tap: { scale: 0.985 },
+                }
+              : {
+                  initial: { x: 0, opacity: 1 },
+                  hover: {
+                    x: 3,
+                    transition: { type: "spring", stiffness: 400, damping: 30 },
+                  },
+                  tap: { scale: 0.985 },
+                };
 
             return (
               <motion.button
                 key={item.path}
                 onClick={() => handleClick(item.path)}
-                className={`${commonBtn} ${
-                  isActive ? activeClasses : inactiveClasses
-                }`}
+                className={btnClass}
                 aria-current={isActive ? "page" : undefined}
                 aria-label={item.label}
                 title={collapsed ? item.label : undefined}
@@ -357,23 +368,21 @@ const SideMenu = ({ activeMenu }) => {
                 whileTap="tap"
                 transition={{ duration: 0.15 }}
               >
+                {/* Icono */}
                 <motion.span
-                  className="grid place-items-center"
-                  whileHover={{
-                    rotate: isActive ? 0 : 0,
-                    scale: isActive ? 1 : 1.03,
-                  }}
+                  className="grid place-items-center w-5 h-5 mx-0"
+                  whileHover={{ rotate: 0, scale: isActive ? 1 : 1.03 }}
                   transition={{ type: "spring", stiffness: 500, damping: 28 }}
                 >
-                  <item.icon className="w-5 h-5 shrink-0 text-current" />
+                  <item.icon className="w-5 h-5 text-current" />
                 </motion.span>
 
-                {/* Etiqueta: se oculta si está colapsado en desktop */}
+                {/* Etiqueta: visible solo expandido */}
                 <AnimatePresence initial={false}>
-                  {showLabels && (
+                  {!collapsed && (
                     <motion.span
                       key="label"
-                      className="truncate"
+                      className="truncate ml-1.5"
                       initial={{ opacity: 0, x: -6 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -6 }}

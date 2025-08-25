@@ -441,7 +441,7 @@ const ViewTaskDetails = () => {
   }, [timeTotalSeconds, isRunning]);
 
   return (
-    <DashboardLayout activeMenu="My Tasks">
+    <DashboardLayout activeMenu="Mis Tareas">
       <div className="mt-5">
         {!effectiveId && (
           <div className="mb-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2

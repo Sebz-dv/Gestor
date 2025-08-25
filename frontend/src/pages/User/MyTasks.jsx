@@ -127,7 +127,7 @@ const MyTasks = () => {
   }, [filterStatus]);
 
   return (
-    <DashboardLayout activeMenu="My Tasks">
+    <DashboardLayout activeMenu="Mis Tareas">
       <div className="my-5">
         <h2 className="text-xl font-semibold">My Tasks</h2>
 
